@@ -1,30 +1,36 @@
+import { relu, reluDerivative } from "./activations.js";
+
 export class Neuron {
-  constructor(weight = Math.random(), bias = Math.random()) {
-    this.weight = weight;
-    this.bias = bias;
+  constructor(inputSize) {
+    this.weights = Array.from(
+      { length: inputSize },
+      () => Math.random() - 0.5
+    );
+    this.bias = Math.random() - 0.5;
     this.learningRate = 0.01;
   }
 
-  predict(x) {
-    return this.weight * x + this.bias;
+  forward(inputs) {
+    this.inputs = inputs;
+
+    this.z =
+      this.weights.reduce(
+        (sum, w, i) => sum + w * inputs[i],
+        0
+      ) + this.bias;
+
+    this.output = relu(this.z);
+    return this.output;
   }
 
-  loss(yPred, yTrue) {
-    return Math.pow(yPred - yTrue, 2);
-  }
+  backward(error) {
+    const dActivation = reluDerivative(this.z);
+    const delta = error * dActivation;
 
-  train(x, yTrue) {
-    const yPred = this.predict(x);
-    const error = yPred - yTrue;
+    this.weights = this.weights.map(
+      (w, i) => w - this.learningRate * delta * this.inputs[i]
+    );
 
-    // Gradients
-    const dWeight = 2 * error * x;
-    const dBias = 2 * error;
-
-    // Mise à jour
-    this.weight -= this.learningRate * dWeight;
-    this.bias -= this.learningRate * dBias;
-
-    return this.loss(yPred, yTrue);
+    this.bias -= this.learningRate * delta;
   }
 }

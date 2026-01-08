@@ -9,8 +9,8 @@ L'historique git a été reconstitué à partir des versions successives du proj
 | Tag | Étape |
 |---|---|
 | `step-01-first-neuron` | Un neurone : y = w·x |
-| **`step-02-neuron-bias`** | **Un neurone avec biais : y = w·x + b** ← ce tag |
-| `step-03-neurons` | Un premier réseau 1-3-1 et la rétropropagation |
+| `step-02-neuron-bias` | Un neurone avec biais : y = w·x + b |
+| **`step-03-neurons`** | **Un premier réseau 1-3-1 et la rétropropagation** ← ce tag |
 | `step-04-x-squared` | Approximation de x² |
 | `step-05-mini-framework` | Mini-framework et classification binaire |
 | `step-06-images` | Classification d'images |
@@ -21,16 +21,23 @@ Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js
 
 ---
 
-## Étape 2 — Un neurone avec biais : y = w·x + b
+## Étape 3 — Un premier réseau 1-3-1 et la rétropropagation
 
-Le neurone reçoit un biais `b` en plus de son poids : il peut maintenant représenter une droite qui ne passe pas par l'origine. Les deux paramètres sont corrigés à chaque exemple (gradient `2 × erreur × x` pour le poids, `2 × erreur` pour le biais). Le jeu de données reste `y = 3x`, et l'entraînement retrouve `w = 3` et `b = 0`.
+Le neurone unique devient un réseau : une entrée, une couche cachée de trois neurones, un neurone de sortie, avec l'activation ReLU. Le code est découpé en trois classes :
+
+- `src/neuron.js` : un neurone à plusieurs entrées (`forward`, `backward`)
+- `src/layer.js` : une couche de neurones
+- `src/network.js` : le réseau 1 → 3 → 1 ; l'erreur de sortie est rétropropagée vers la couche cachée en la multipliant par les poids de sortie
+- `src/activations.js` : ReLU et sa dérivée
+
+Le jeu de données reste `y = 3x`. Le modèle sauvegardé contient maintenant tous les poids et biais du réseau.
 
 ## Lancer
 
 ```sh
-npm run exec -- 4        # prédiction avec le modèle fourni
+npm run exec -- 4
 npm run train -- 1000
-npm run exec -- 10
+npm run exec -- 7
 ```
 
 ## Exemples d'exécution
@@ -38,24 +45,26 @@ npm run exec -- 10
 ```
 $ npm run exec -- 4
 Input : 4
-Output: 12.00
+Output: 12.0000
 ```
 
 ```
 $ npm run train
-Epoch 100/1000 | Loss=0.0180 | w=2.9689 | b=0.1318
-Epoch 200/1000 | Loss=0.0005 | w=2.9949 | b=0.0217
-Epoch 300/1000 | Loss=0.0000 | w=2.9992 | b=0.0036
-Epoch 400/1000 | Loss=0.0000 | w=2.9999 | b=0.0006
-Epoch 500/1000 | Loss=0.0000 | w=3.0000 | b=0.0001
-Epoch 600/1000 | Loss=0.0000 | w=3.0000 | b=0.0000
-Epoch 700/1000 | Loss=0.0000 | w=3.0000 | b=0.0000
-Epoch 800/1000 | Loss=0.0000 | w=3.0000 | b=0.0000
-Epoch 900/1000 | Loss=0.0000 | w=3.0000 | b=0.0000
-Epoch 1000/1000 | Loss=0.0000 | w=3.0000 | b=0.0000
+Epoch 100/1000 - Loss: 0.0182
+Epoch 200/1000 - Loss: 0.0000
+Epoch 300/1000 - Loss: 0.0000
+Epoch 400/1000 - Loss: 0.0000
+Epoch 500/1000 - Loss: 0.0000
+Epoch 600/1000 - Loss: 0.0000
+Epoch 700/1000 - Loss: 0.0000
+Epoch 800/1000 - Loss: 0.0000
+Epoch 900/1000 - Loss: 0.0000
+Epoch 1000/1000 - Loss: 0.0000
 Entraînement terminé.
 
-$ npm run exec -- 10
-Input : 10
-Output: 30.00
+$ npm run exec -- 7
+Input : 7
+Output: 21.0000
 ```
+
+Les poids de départ sont aléatoires : d'un entraînement à l'autre, la courbe d'erreur varie.
