@@ -5,7 +5,7 @@ const model = JSON.parse(
   fs.readFileSync("./model/model.json", "utf-8")
 );
 
-const neuron = new Neuron(model.weight);
+const neuron = new Neuron(model.weight, model.bias);
 
 const input = Number(process.argv[2]);
 
@@ -16,5 +16,5 @@ if (isNaN(input)) {
 
 const output = neuron.predict(input);
 
-console.log(`Input: ${input}`);
+console.log(`Input : ${input}`);
 console.log(`Output: ${output.toFixed(2)}`);
