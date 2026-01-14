@@ -1,35 +1,29 @@
 import fs from "fs";
 import { Network } from "./network.js";
 
-// Lecture du modèle entraîné
+// Chargement du modèle
 const rawModel = JSON.parse(
   fs.readFileSync("./model/model.json", "utf-8")
 );
 
-// Reconstruction du réseau
-const net = new Network();
+const net = Network.load(rawModel);
 
-// On restaure les poids manuellement
-net.hidden.neurons.forEach((neuron, i) => {
-  neuron.weights = rawModel.hidden.neurons[i].weights;
-  neuron.bias = rawModel.hidden.neurons[i].bias;
-});
+const x = Number(process.argv[2]);
 
-net.output.neurons.forEach((neuron, i) => {
-  neuron.weights = rawModel.output.neurons[i].weights;
-  neuron.bias = rawModel.output.neurons[i].bias;
-});
-
-// Lecture de l’entrée
-const input = Number(process.argv[2]);
-
-if (isNaN(input)) {
-  console.error("Veuillez fournir une valeur numérique en entrée.");
+if (isNaN(x)) {
+  console.error("Entrée invalide");
   process.exit(1);
 }
 
-// Prédiction
-const output = net.predict(input);
+const debug = net.debugPredict(x);
 
-console.log(`Input : ${input}`);
-console.log(`Output: ${output.toFixed(4)}`);
+console.log(`x = ${debug.x}`);
+console.log("Activations cachées :");
+
+debug.hidden.forEach(h =>
+  console.log(
+    `  Neurone ${h.neuron} | z=${h.z} | ReLU=${h.activation}`
+  )
+);
+
+console.log(`Sortie finale y ≈ ${debug.output}`);

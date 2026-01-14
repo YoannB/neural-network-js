@@ -10,8 +10,8 @@ L'historique git a été reconstitué à partir des versions successives du proj
 |---|---|
 | `step-01-first-neuron` | Un neurone : y = w·x |
 | `step-02-neuron-bias` | Un neurone avec biais : y = w·x + b |
-| **`step-03-neurons`** | **Un premier réseau 1-3-1 et la rétropropagation** ← ce tag |
-| `step-04-x-squared` | Approximation de x² |
+| `step-03-neurons` | Un premier réseau 1-3-1 et la rétropropagation |
+| **`step-04-x-squared`** | **Approximation de x²** ← ce tag |
 | `step-05-mini-framework` | Mini-framework et classification binaire |
 | `step-06-images` | Classification d'images |
 | `step-07-optimizers` | Optimiseurs Adam et RMSprop |
@@ -21,50 +21,78 @@ Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js
 
 ---
 
-## Étape 3 — Un premier réseau 1-3-1 et la rétropropagation
+## Étape 4 — Approximation de x²
 
-Le neurone unique devient un réseau : une entrée, une couche cachée de trois neurones, un neurone de sortie, avec l'activation ReLU. Le code est découpé en trois classes :
+Le réseau apprend une fonction non linéaire : `y = x²` sur l'intervalle [0, 5], à partir de 51 points (`data/dataset.json`).
 
-- `src/neuron.js` : un neurone à plusieurs entrées (`forward`, `backward`)
-- `src/layer.js` : une couche de neurones
-- `src/network.js` : le réseau 1 → 3 → 1 ; l'erreur de sortie est rétropropagée vers la couche cachée en la multipliant par les poids de sortie
-- `src/activations.js` : ReLU et sa dérivée
-
-Le jeu de données reste `y = 3x`. Le modèle sauvegardé contient maintenant tous les poids et biais du réseau.
+- couche cachée de 12 neurones en **tanh**, sortie **linéaire** (`src/activations.js` ajoute aussi leaky ReLU) ;
+- initialisation des poids à l'échelle `√(2 / nombre d'entrées)` ;
+- **gradients écrêtés** (limités à ±5) et contrôle des valeurs non finies ;
+- **normalisation** des entrées et des sorties, calculée à partir du jeu de données et sauvegardée avec le modèle ;
+- paramètres en ligne de commande : `--epochs`, `--neurons`, `--lr`, `--noise` (bruit ajouté aux entrées) ;
+- `npm run table` compare la valeur attendue et la valeur prédite pour chaque point ;
+- `npm run exec` affiche aussi l'activation de chaque neurone caché.
 
 ## Lancer
 
 ```sh
-npm run exec -- 4
-npm run train -- 1000
-npm run exec -- 7
+npm run exec -- 2.5
+npm run table
+npm run train -- --epochs 10000 --neurons 12 --lr 0.003
 ```
 
 ## Exemples d'exécution
 
+Avec le modèle fourni :
+
 ```
-$ npm run exec -- 4
-Input : 4
-Output: 12.0000
+$ npm run exec -- 2.5
+x = 2.5
+Activations cachées :
+  Neurone 0 | z=4.0778 | ReLU=0.9994
+  Neurone 1 | z=-0.6901 | ReLU=-0.5980
+  Neurone 2 | z=-0.5296 | ReLU=-0.4851
+  Neurone 3 | z=0.7274 | ReLU=0.6215
+  Neurone 4 | z=0.9147 | ReLU=0.7234
+  Neurone 5 | z=0.1988 | ReLU=0.1962
+  Neurone 6 | z=-1.5080 | ReLU=-0.9066
+  Neurone 7 | z=-2.4685 | ReLU=-0.9857
+  Neurone 8 | z=-0.9326 | ReLU=-0.7318
+  Neurone 9 | z=1.3073 | ReLU=0.8636
+  Neurone 10 | z=-1.3334 | ReLU=-0.8701
+  Neurone 11 | z=0.9686 | ReLU=0.7481
+Sortie finale y ≈ 6.2546
 ```
+
+```
+$ npm run table          (extrait)
+x      | y_true     | y_pred
+--------------------------------------------------------------------------------
+0.00   | 0.00       | -0.0732
+0.50   | 0.25       | 0.3887
+1.00   | 1.00       | 1.0993
+1.50   | 2.25       | 2.2346
+2.00   | 4.00       | 3.9440
+2.50   | 6.25       | 6.2546
+3.00   | 9.00       | 9.0634
+3.50   | 12.25      | 12.2576
+4.00   | 16.00      | 15.9210
+4.50   | 20.25      | 20.3087
+5.00   | 25.00      | 25.0751
+```
+
+Entraînement :
 
 ```
 $ npm run train
-Epoch 100/1000 - Loss: 0.0182
-Epoch 200/1000 - Loss: 0.0000
-Epoch 300/1000 - Loss: 0.0000
-Epoch 400/1000 - Loss: 0.0000
-Epoch 500/1000 - Loss: 0.0000
-Epoch 600/1000 - Loss: 0.0000
-Epoch 700/1000 - Loss: 0.0000
-Epoch 800/1000 - Loss: 0.0000
-Epoch 900/1000 - Loss: 0.0000
-Epoch 1000/1000 - Loss: 0.0000
-Entraînement terminé.
-
-$ npm run exec -- 7
-Input : 7
-Output: 21.0000
+Training config:
+{ EPOCHS: 10000, NEURONS: 12, LR: 0.003, NOISE: 0 }
+Epoch 500/10000 - Loss: 0.011159
+Epoch 1000/10000 - Loss: 0.001892
+Epoch 1500/10000 - Loss: 0.001670
+…
+Epoch 9000/10000 - Loss: 0.001035
+Epoch 9500/10000 - Loss: 0.000982
+Epoch 10000/10000 - Loss: 0.000933
+Model saved to model/model.json
 ```
-
-Les poids de départ sont aléatoires : d'un entraînement à l'autre, la courbe d'erreur varie.

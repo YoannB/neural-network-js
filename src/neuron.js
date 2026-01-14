@@ -1,13 +1,15 @@
-import { relu, reluDerivative } from "./activations.js";
+import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative } from "./activations.js";
 
 export class Neuron {
-  constructor(inputSize) {
+  constructor(inputSize, activation = "leakyrelu", learningRate = 0.003) {
+    const scale = Math.sqrt(2 / inputSize);
     this.weights = Array.from(
       { length: inputSize },
-      () => Math.random() - 0.5
+      () => (Math.random() * 2 - 1) * scale
     );
-    this.bias = Math.random() - 0.5;
-    this.learningRate = 0.01;
+    this.bias = Math.random() * 0.5 - 0.25;
+    this.learningRate = Number(learningRate) || 0.003;
+    this.activation = activation;
   }
 
   forward(inputs) {
@@ -19,18 +21,57 @@ export class Neuron {
         0
       ) + this.bias;
 
-    this.output = relu(this.z);
+    if (this.activation === "leakyrelu") {
+      this.output = leakyRelu(this.z);
+    } else if (this.activation === "tanh") {
+      this.output = tanh(this.z);
+    } else {
+      this.output = this.z;
+    }
+
     return this.output;
   }
 
   backward(error) {
-    const dActivation = reluDerivative(this.z);
-    const delta = error * dActivation;
+    if (!Number.isFinite(error)) {
+      throw new Error("Erreur reçue NaN dans backward: " + error);
+    }
 
-    this.weights = this.weights.map(
-      (w, i) => w - this.learningRate * delta * this.inputs[i]
-    );
+    let delta;
 
-    this.bias -= this.learningRate * delta;
+    if (this.activation === "leakyrelu") {
+      delta = error * leakyReluDerivative(this.z);
+    } else if (this.activation === "tanh") {
+      delta = error * tanhDerivative(this.z);
+    } else {
+      delta = error;
+    }
+
+    if (!Number.isFinite(delta)) {
+      throw new Error("Delta non valide: " + delta);
+    }
+
+    const clip = (v, limit = 1) => Math.max(-limit, Math.min(limit, v));
+
+    this.weights = this.weights.map((w, i) => {
+      const input = this.inputs[i];
+
+      if (!Number.isFinite(input)) {
+        throw new Error("Input invalide dans backward: " + input);
+      }
+
+      const grad = delta * input;
+      const clippedGrad = clip(grad, 5);
+
+      const newW = w - this.learningRate * clippedGrad;
+
+      if (!Number.isFinite(newW)) {
+        throw new Error("Poids devenu invalide: " + newW);
+      }
+
+      return newW;
+    });
+
+    this.bias -= this.learningRate * clip(delta, 5);
   }
 }
