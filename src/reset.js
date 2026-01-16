@@ -1,5 +1,5 @@
 import fs from "fs";
-import { Network } from "./network.js";
+import { Network } from "./core/network.js";
 
 // Nouveau réseau avec poids aléatoires
 const net = new Network();

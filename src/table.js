@@ -1,43 +1,51 @@
 import fs from "fs";
-import { Network } from "./network.js";
+import { Network } from "./core/network.js";
+import getDataset from "./datasets/index.js";
 
+
+// -------------------------
 // Chargement du modèle
+// -------------------------
 const rawModel = JSON.parse(
     fs.readFileSync("./model/model.json", "utf-8")
 );
 
 const net = Network.load(rawModel);
 
-// Jeu de test étendu
-const dataset = JSON.parse(
-    fs.readFileSync("./data/dataset.json", "utf-8")
-);
-const xs = dataset.inputs;
+// -------------------------
+// Vérification dataset intégré
+// -------------------------
+if (!rawModel.meta.dataset) {
+    console.error("Aucun dataset trouvé dans model.json");
+    process.exit(1);
+}
 
+const dataset = getDataset(rawModel.meta.dataset)
+
+// -------------------------
 // Header
+// -------------------------
 console.log(
     [
-        "x".padEnd(6),
-        "y_true".padEnd(10),
-        "y_pred".padEnd(10),
-        //...net.hidden.neurons.map((_, i) => `h${i}`.padEnd(8))
+        "Input".padEnd(30),
+        "y_true".padEnd(12),
+        "y_pred".padEnd(12)
     ].join(" | ")
 );
 
-console.log("-".repeat(80));
+console.log("-".repeat(70));
 
-for (const x of xs) {
-    const yTrue = x * x;
+// -------------------------
+// Table
+// -------------------------
+dataset.samples.forEach(({ x, y }, i) => {
+    const yTrue = y;
 
-    const debug = net.debugPredict(x);
+    const yPred = net.predict(x);
 
-    const row = [
-        x.toFixed(2).padEnd(6),
-        yTrue.toFixed(2).padEnd(10),
-        debug.output.padEnd(10),
-        //...debug.hiddenOutputs.map(v => v.toFixed(4).padEnd(8))
-    ];
+    const inputStr = JSON.stringify(x).padEnd(30);
+    const yTrueStr = Number(yTrue).toFixed(6).padEnd(12);
+    const yPredStr = Number(yPred).toFixed(6).padEnd(12);
 
-    console.log(row.join(" | "));
-}
-
+    console.log([inputStr, yTrueStr, yPredStr].join(" | "));
+});

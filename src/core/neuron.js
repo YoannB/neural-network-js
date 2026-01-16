@@ -1,4 +1,4 @@
-import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative } from "./activations.js";
+import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
 
 export class Neuron {
   constructor(inputSize, activation = "leakyrelu", learningRate = 0.003) {
@@ -13,6 +13,18 @@ export class Neuron {
   }
 
   forward(inputs) {
+    if (!Array.isArray(inputs)) {
+      throw new Error(
+        `Neuron.forward attend un tableau, reçu: ${typeof inputs} (${inputs})`
+      );
+    }
+
+    if (inputs.length !== this.weights.length) {
+      throw new Error(
+        `Dimension mismatch: inputs=${inputs.length}, weights=${this.weights.length}`
+      );
+    }
+
     this.inputs = inputs;
 
     this.z =
@@ -25,6 +37,8 @@ export class Neuron {
       this.output = leakyRelu(this.z);
     } else if (this.activation === "tanh") {
       this.output = tanh(this.z);
+    } else if (this.activation === "sigmoid") {
+      this.output = sigmoid(this.z);
     } else {
       this.output = this.z;
     }
@@ -43,6 +57,8 @@ export class Neuron {
       delta = error * leakyReluDerivative(this.z);
     } else if (this.activation === "tanh") {
       delta = error * tanhDerivative(this.z);
+    } else if (this.activation === "sigmoid") {
+      delta = error * sigmoidDerivative(this.z);
     } else {
       delta = error;
     }

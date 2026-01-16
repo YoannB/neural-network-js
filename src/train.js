@@ -1,11 +1,23 @@
 import fs from "fs";
-import { Network } from "./network.js";
+import { Network } from "./core/network.js";
+import getDataset from "./datasets/index.js";
+
+// -------------------------
+// Lecture dataset
+// -------------------------
+const datasetName = process.argv[2] || "square";
+const dataset = getDataset(datasetName);
+
+console.log(`Dataset: ${dataset.name}`);
+console.log(`Samples: ${dataset.samples.length}`);
+console.log(`Input size: ${dataset.inputSize}`);
+console.log(`Output size: ${dataset.outputSize}`);
+console.log(`Task: ${dataset.task}`);
 
 // -------------------------
 // Lecture des paramètres CLI
 // -------------------------
-
-const args = process.argv.slice(2);
+const args = process.argv.slice(3);
 
 function getArg(name, defaultValue) {
   const index = args.indexOf(`--${name}`);
@@ -25,49 +37,46 @@ console.log("Training config:");
 console.log({ EPOCHS, NEURONS, LR, NOISE });
 
 // -------------------------
-// Création du réseau
+// Préprocessing (depuis les samples)
 // -------------------------
+function computePreprocessing(samples) {
+  const allX = samples.flatMap(s => s.x);
+  const allY = samples.flatMap(s => s.y);
 
-const dataset = JSON.parse(
-  fs.readFileSync("./data/dataset.json", "utf-8")
-);
-
-function computePreprocessing(X, Y) {
   return {
-    xScale: Math.max(...X.map(v => Math.abs(v))),
-    yScale: Math.max(...Y.map(v => Math.abs(v)))
+    xScale: Math.max(...allX.map(v => Math.abs(v))) || 1,
+    yScale: Math.max(...allY.map(v => Math.abs(v))) || 1
   };
 }
 
-const preprocessing = computePreprocessing(dataset.inputs, dataset.outputs);
+const preprocessing = computePreprocessing(dataset.samples);
 
+// -------------------------
+// Création du réseau
+// -------------------------
 const net = new Network({
+  inputSize: dataset.inputSize,
   hiddenNeurons: NEURONS,
   learningRate: LR,
-  preprocessing
+  preprocessing,
+  task: dataset.task
 });
-
-const data = [];
-dataset.inputs.map((x, i) => {
-  data.push({ x, y: dataset.outputs[i] });
-})
 
 // -------------------------
 // Entraînement
 // -------------------------
-
 for (let epoch = 1; epoch <= EPOCHS; epoch++) {
   let totalLoss = 0;
 
-  for (const { x, y } of data) {
-    const noisyX = x + (Math.random() - 0.5) * NOISE;
+  for (const { x, y } of dataset.samples) {
+    const noisyX = x.map(v => v + (Math.random() - 0.5) * NOISE);
     const loss = net.train(noisyX, y);
     totalLoss += loss;
   }
 
   if (epoch % 500 === 0) {
     console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / data.length).toFixed(6)}`
+      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / dataset.samples.length).toFixed(6)}`
     );
   }
 }
@@ -75,9 +84,15 @@ for (let epoch = 1; epoch <= EPOCHS; epoch++) {
 // -------------------------
 // Sauvegarde du modèle
 // -------------------------
-
 const model = {
+  meta: {
+    dataset: dataset.name,
+    inputSize: dataset.inputSize,
+    outputSize: dataset.outputSize,
+    task: dataset.task
+  },
   config: {
+    inputSize: dataset.inputSize,
     hiddenNeurons: net.hidden.neurons.length,
     learningRate: net.hidden.neurons[0].learningRate,
     preprocessing
