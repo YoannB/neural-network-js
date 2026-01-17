@@ -12,8 +12,8 @@ L'historique git a été reconstitué à partir des versions successives du proj
 | `step-02-neuron-bias` | Un neurone avec biais : y = w·x + b |
 | `step-03-neurons` | Un premier réseau 1-3-1 et la rétropropagation |
 | `step-04-x-squared` | Approximation de x² |
-| **`step-05-mini-framework`** | **Mini-framework et classification binaire** ← ce tag |
-| `step-06-images` | Classification d'images |
+| `step-05-mini-framework` | Mini-framework et classification binaire |
+| **`step-06-images`** | **Classification d'images** ← ce tag |
 | `step-07-optimizers` | Optimiseurs Adam et RMSprop |
 | `step-08-multiclass` | Classification multiclasse |
 
@@ -21,106 +21,84 @@ Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js
 
 ---
 
-## Étape 5 — Mini-framework et classification binaire
+## Étape 6 — Classification d'images
 
-Le code est réorganisé pour servir à plusieurs problèmes :
+Le framework de l'étape 5 classe maintenant des photos. Le jeu de données `images` (`src/datasets/images.js`) :
 
-- `src/core/` : le réseau (neurone, couche, réseau, activations) ; les entrées sont maintenant des vecteurs, avec contrôle des dimensions ;
-- `src/datasets/` : les jeux de données, choisis par leur nom en ligne de commande :
-  - `square` : y = x² (régression),
-  - `xor` : le OU exclusif (classification binaire),
-  - `primes` : un nombre de 0 à 13, donné en binaire sur 5 bits, est-il premier ? (classification binaire) ;
-- **classification binaire** : sortie sigmoïde et entropie croisée binaire ; le type de tâche est enregistré dans le modèle ;
-- `exec` accepte plusieurs valeurs (`1 0`) ou un tableau JSON (`[1,0]`).
+- lit les fichiers `.jpg` du dossier `tmp/oranges/` ;
+- les réduit en 32 × 32 pixels, en niveaux de gris, avec la bibliothèque `sharp` : chaque image devient un vecteur de 1024 valeurs entre 0 et 1 ;
+- prend l'étiquette dans le nom du fichier : `_ok` (classe 1) ou `_ko` (classe 0).
+
+`exec` accepte directement un fichier image, et `table` affiche la précision ainsi que les faux positifs et faux négatifs.
+
+## Préparer les images
+
+```sh
+npm install
+mkdir -p tmp/oranges
+```
+
+Le dossier `tmp/oranges/` est lu au démarrage de `train` et `table` : il doit exister, même vide, pour utiliser les autres jeux de données (`square`, `xor`, `primes`).
+
+Pour le remplir, `scripts/download-oranges.js` télécharge jusqu'à 100 photos d'oranges depuis Pixabay (clé gratuite à créer sur [pixabay.com/api/docs](https://pixabay.com/api/docs/)) :
+
+```sh
+PIXABAY_API_KEY=votre_clé node scripts/download-oranges.js
+```
+
+Les fichiers téléchargés s'appellent `orange_N.jpg` ; il reste à les étiqueter en les renommant `orange_N_ok.jpg` ou `orange_N_ko.jpg`.
 
 ## Lancer
 
 ```sh
-npm run table                         # modèle fourni : nombres premiers
-npm run exec -- 0 1 1 0 1             # 13 en binaire
-npm run train -- xor --epochs 5000 --lr 0.1
+npm run train -- images
 npm run table
-npm run exec -- 1 0
-npm run train -- square
-npm run exec -- 3
+npm run exec -- chemin/vers/photo.jpg
 ```
 
 ## Exemples d'exécution
 
-Avec le modèle fourni (nombres premiers) :
+Sur 100 photos d'oranges étiquetées `ok` / `ko` :
 
 ```
-$ npm run table
-Input                          | y_true       | y_pred
-----------------------------------------------------------------------
-[0,0,0,0,0]                    | 0.000000     | 0.003639
-[0,0,0,0,1]                    | 0.000000     | 0.053864
-[0,0,0,1,0]                    | 1.000000     | 0.914373
-[0,0,0,1,1]                    | 1.000000     | 0.994995
-[0,0,1,0,0]                    | 0.000000     | 0.013257
-[0,0,1,0,1]                    | 1.000000     | 0.966516
-[0,0,1,1,0]                    | 0.000000     | 0.073637
-[0,0,1,1,1]                    | 1.000000     | 0.992434
-[0,1,0,0,0]                    | 0.000000     | 0.000180
-[0,1,0,0,1]                    | 0.000000     | 0.033000
-[0,1,0,1,0]                    | 0.000000     | 0.051689
-[0,1,0,1,1]                    | 1.000000     | 0.972385
-[0,1,1,0,0]                    | 0.000000     | 0.006872
-[0,1,1,0,1]                    | 1.000000     | 0.943000
+$ npm run train -- images
+Images chargées: 100, ignorées: 0
+…
+Epoch 9000/10000 - Loss: 0.002556
+Epoch 9500/10000 - Loss: 0.002461
+Epoch 10000/10000 - Loss: 0.002375
+Model saved to model/model.json
 
-$ npm run exec -- 0 1 1 0 1
-Model dataset: primes
-Expected input size: 5
+$ npm run table          (résumé)
+Résumé:
+Task           : binary-classification
+Samples        : 100
+Accuracy       : 100.00 %
+False positives: 0
+False negatives: 0
+```
 
-Input: [ 0, 1, 1, 0, 1 ]
+Puis sur trois photos qui ne font pas partie de l'entraînement :
+
+```
+$ npm run exec -- tmp/test-orange.jpg
+Model dataset: images
+Expected input size: 1024
+
 Activations cachées :
-  Neurone 0 | z=0.258196 | activation=0.252607
+  Neurone 0 | z=-0.993343 | activation=-0.758784
   …
-  Neurone 11 | z=0.425374 | activation=0.401448
+  Neurone 11 | z=0.418847 | activation=0.395959
 
-Sortie finale y ≈ 0.943000
-```
+Sortie finale y ≈ 0.988827
 
-XOR :
-
-```
-$ npm run train -- xor --epochs 5000 --lr 0.1
-Dataset: xor
-Samples: 4
-Input size: 2
-Output size: 1
-Task: binary-classification
-Training config:
-{ EPOCHS: 5000, NEURONS: 12, LR: 0.1, NOISE: 0 }
-Epoch 500/5000 - Loss: 0.069761
-Epoch 1000/5000 - Loss: 0.039118
+$ npm run exec -- tmp/test-clementine.jpg
 …
-Epoch 4500/5000 - Loss: 0.012242
-Epoch 5000/5000 - Loss: 0.011282
-Model saved to model/model.json
+Sortie finale y ≈ 0.771983
 
-$ npm run table
-Input                          | y_true       | y_pred
-----------------------------------------------------------------------
-[0,0]                          | 0.000000     | 0.002994
-[0,1]                          | 1.000000     | 0.987098
-[1,0]                          | 1.000000     | 0.986627
-[1,1]                          | 0.000000     | 0.015533
-
-$ npm run exec -- 1 0
+$ npm run exec -- tmp/test-abricot.jpg
 …
-Sortie finale y ≈ 0.986627
+Sortie finale y ≈ 0.078741
 ```
 
-x² avec le même framework :
-
-```
-$ npm run train -- square
-…
-Epoch 10000/10000 - Loss: 0.000949
-Model saved to model/model.json
-
-$ npm run exec -- 3
-…
-Sortie finale y ≈ 9.041356
-```
+La précision de `table` est mesurée sur les images d'entraînement elles-mêmes.

@@ -7,5 +7,8 @@
     "train": "node src/train.js",
     "exec": "node src/exec.js",
     "table": "node src/table.js"
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
   }
 }

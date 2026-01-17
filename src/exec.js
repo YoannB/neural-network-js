@@ -1,4 +1,5 @@
 import fs from "fs";
+import sharp from "sharp";
 import { Network } from "./core/network.js";
 
 // -------------------------
@@ -27,8 +28,36 @@ if (args.length === 0) {
 
 let input;
 
-// Cas 1: tableau JSON
-if (args.length === 1 && args[0].startsWith("[")) {
+// ================================
+// CAS 1 : fichier image
+// ================================
+if (fs.existsSync(args[0])) {
+  const file = args[0];
+
+  const size = Math.sqrt(inputSize);
+  if (!Number.isInteger(size)) {
+    console.error("InputSize incompatible avec une image carrée:", inputSize);
+    process.exit(1);
+  }
+
+  try {
+    const buffer = await sharp(file)
+      .resize(size, size)
+      .grayscale()
+      .raw()
+      .toBuffer();
+
+    input = Array.from(buffer).map(v => v / 255);
+  } catch (err) {
+    console.error("Erreur lecture image:", err.message);
+    process.exit(1);
+  }
+}
+
+// ================================
+// CAS 2 : tableau JSON
+// ================================
+else if (args.length === 1 && args[0].startsWith("[")) {
   try {
     input = JSON.parse(args[0]);
   } catch {
@@ -36,13 +65,16 @@ if (args.length === 1 && args[0].startsWith("[")) {
     process.exit(1);
   }
 }
-// Cas 2: valeurs séparées (1 0)
+
+// ================================
+// CAS 3 : valeurs séparées
+// ================================
 else {
   input = args.map(Number);
 }
 
 if (input.some(v => !Number.isFinite(v))) {
-  console.error("Entrée invalide :", input);
+  console.error("Entrée invalide :", input.slice(0, 10));
   process.exit(1);
 }
 
@@ -61,8 +93,7 @@ if (input.length !== inputSize) {
 // -------------------------
 const debug = net.debugPredict(input);
 
-console.log("\nInput:", input);
-console.log("Activations cachées :");
+console.log("\nActivations cachées :");
 
 debug.hidden.forEach(h =>
   console.log(
