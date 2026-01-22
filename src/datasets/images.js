@@ -47,7 +47,7 @@ async function loadImages() {
         }
     }
 
-    console.log(`Images chargées: ${samples.length}, ignorées: ${skipped}`);
+    // console.log(`Images chargées: ${samples.length}, ignorées: ${skipped}`);
 
     return {
         name: "images",

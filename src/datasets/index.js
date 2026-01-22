@@ -1,18 +1,17 @@
-import square from './square.js';
-import xor from './xor.js';
-import primes from './primes.js';
-import images from './images.js';
-
-const datasets = {
-    square,
-    xor,
-    primes,
-    images
-};
+import xor from "./xor.js";
+import square from "./square.js";
+import primes from "./primes.js";
+import images from "./images.js";
+import linear from "./linear.js";
 
 export default function getDataset(name) {
-    if (!datasets[name]) {
-        throw new Error(`Dataset inconnu: ${name}`);
+    switch (name) {
+        case "linear": return linear;
+        case "xor": return xor;
+        case "square": return square;
+        case "primes": return primes;
+        case "images": return images;
+        default:
+            throw new Error(`Dataset inconnu: ${name}`);
     }
-    return datasets[name];
 }

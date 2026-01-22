@@ -2,103 +2,67 @@ import fs from "fs";
 import sharp from "sharp";
 import { Network } from "./core/network.js";
 
-// -------------------------
-// Chargement du modèle
-// -------------------------
+const dataset = process.argv[2];
+if (!dataset) {
+  console.error("Usage: exec.js <dataset> <input>");
+  process.exit(1);
+}
+
+let inputStartIndex = 3;
+
+const modelName = dataset;
+
+console.log(`Read ./models/${modelName}.json`);
+
 const rawModel = JSON.parse(
-  fs.readFileSync("./model/model.json", "utf-8")
+  fs.readFileSync(`./models/${modelName}.json`, "utf-8")
 );
 
 const net = Network.load(rawModel);
+const { inputSize } = rawModel.meta;
 
-const { inputSize, dataset } = rawModel.meta;
-
-console.log(`Model dataset: ${dataset}`);
-console.log(`Expected input size: ${inputSize}`);
-
-// -------------------------
-// Lecture entrée CLI
-// -------------------------
-const args = process.argv.slice(2);
-
-if (args.length === 0) {
+const args = process.argv.slice(inputStartIndex);
+if (!args.length) {
   console.error("Veuillez fournir une entrée");
   process.exit(1);
 }
 
 let input;
 
-// ================================
-// CAS 1 : fichier image
-// ================================
+// image
 if (fs.existsSync(args[0])) {
-  const file = args[0];
-
   const size = Math.sqrt(inputSize);
-  if (!Number.isInteger(size)) {
-    console.error("InputSize incompatible avec une image carrée:", inputSize);
-    process.exit(1);
-  }
+  const buffer = await sharp(args[0])
+    .resize(size, size)
+    .grayscale()
+    .raw()
+    .toBuffer();
 
-  try {
-    const buffer = await sharp(file)
-      .resize(size, size)
-      .grayscale()
-      .raw()
-      .toBuffer();
-
-    input = Array.from(buffer).map(v => v / 255);
-  } catch (err) {
-    console.error("Erreur lecture image:", err.message);
-    process.exit(1);
-  }
+  input = Array.from(buffer).map(v => v / 255);
 }
 
-// ================================
-// CAS 2 : tableau JSON
-// ================================
+// json
 else if (args.length === 1 && args[0].startsWith("[")) {
-  try {
-    input = JSON.parse(args[0]);
-  } catch {
-    console.error("Entrée JSON invalide");
-    process.exit(1);
-  }
+  input = JSON.parse(args[0]);
 }
 
-// ================================
-// CAS 3 : valeurs séparées
-// ================================
+// numbers
 else {
   input = args.map(Number);
 }
 
-if (input.some(v => !Number.isFinite(v))) {
-  console.error("Entrée invalide :", input.slice(0, 10));
-  process.exit(1);
-}
-
-// -------------------------
-// Validation dimensions
-// -------------------------
 if (input.length !== inputSize) {
-  console.error(
-    `Dimension incorrecte: reçu ${input.length}, attendu ${inputSize}`
-  );
+  console.error(`Dimension incorrecte: ${input.length} vs ${inputSize}`);
   process.exit(1);
 }
 
-// -------------------------
-// Prédiction
-// -------------------------
+console.log("Debug predict :", input);
+
 const debug = net.debugPredict(input);
 
-console.log("\nActivations cachées :");
-
+console.log("\nHidden:");
 debug.hidden.forEach(h =>
-  console.log(
-    `  Neurone ${h.neuron} | z=${h.z} | activation=${h.activation}`
-  )
+  console.log(`Neuron ${h.neuron} | z=${h.z} | a=${h.activation}`)
 );
 
-console.log(`\nSortie finale y ≈ ${debug.output}`);
+console.log(`\nOutput: ${debug.output}`);

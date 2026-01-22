@@ -3,72 +3,102 @@ import { Network } from "./core/network.js";
 import getDataset from "./datasets/index.js";
 
 // -------------------------
-// Lecture dataset
+// CLI parsing (cohérent avec exec.js)
 // -------------------------
-const datasetName = process.argv[2] || "square";
-const dataset = getDataset(datasetName);
 
-console.log(`Dataset: ${dataset.name}`);
-console.log(`Samples: ${dataset.samples.length}`);
-console.log(`Input size: ${dataset.inputSize}`);
-console.log(`Output size: ${dataset.outputSize}`);
-console.log(`Task: ${dataset.task}`);
+const dataset = process.argv[2] || "square";
+
+let argsStartIndex = 3;
+
+const modelName = dataset;
+
+const datasetObj = getDataset(dataset);
+
+console.log(`Dataset    : ${datasetObj.name}`);
+console.log(`Model name : ${modelName}`);
+console.log(`Samples    : ${datasetObj.samples.length}`);
+console.log(`Input size : ${datasetObj.inputSize}`);
+console.log(`Output size: ${datasetObj.outputSize}`);
+console.log(`Task       : ${datasetObj.task}`);
 
 // -------------------------
-// Lecture des paramètres CLI
+// Hyperparams
 // -------------------------
-const args = process.argv.slice(3);
+
+const args = process.argv.slice(argsStartIndex);
+
 
 function getArg(name, defaultValue) {
   const index = args.indexOf(`--${name}`);
   if (index !== -1) {
-    const value = Number(args[index + 1]);
-    if (Number.isFinite(value)) return value;
+    const value = args[index + 1];
+    if (value === undefined) return defaultValue;
+
+    // Support valeurs numériques et strings
+    const numValue = Number(value);
+    if (Number.isFinite(numValue)) return numValue;
+    return value;
   }
   return defaultValue;
 }
 
 const EPOCHS = getArg("epochs", 10000);
-const NEURONS = getArg("neurons", 12);
-const LR = getArg("lr", 0.003);
+const NEURONS = getArg("neurons", 10);
+const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
+const OPTIMIZER = getArg("optimizer", "adam"); // sgd, adam, rmsprop
 
-console.log("Training config:");
-console.log({ EPOCHS, NEURONS, LR, NOISE });
+console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER });
 
 // -------------------------
-// Préprocessing (depuis les samples)
+// Preprocessing
 // -------------------------
+
 function computePreprocessing(samples) {
-  const allX = samples.flatMap(s => s.x);
-  const allY = samples.flatMap(s => s.y);
+  let maxX = 0;
+  let maxY = 0;
+
+  for (const s of samples) {
+    for (const v of s.x) {
+      const a = Math.abs(v);
+      if (a > maxX) maxX = a;
+    }
+    for (const v of s.y) {
+      const a = Math.abs(v);
+      if (a > maxY) maxY = a;
+    }
+  }
 
   return {
-    xScale: Math.max(...allX.map(v => Math.abs(v))) || 1,
-    yScale: Math.max(...allY.map(v => Math.abs(v))) || 1
+    xScale: maxX || 1,
+    yScale: maxY || 1
   };
 }
 
-const preprocessing = computePreprocessing(dataset.samples);
+const preprocessing = computePreprocessing(datasetObj.samples);
 
 // -------------------------
-// Création du réseau
+// Network
 // -------------------------
+
 const net = new Network({
-  inputSize: dataset.inputSize,
+  inputSize: datasetObj.inputSize,
   hiddenNeurons: NEURONS,
   learningRate: LR,
   preprocessing,
-  task: dataset.task
+  task: datasetObj.task,
+  optimizer: OPTIMIZER
 });
 
 // -------------------------
-// Entraînement
+// Training
 // -------------------------
+
+console.time("Training");
 for (let epoch = 1; epoch <= EPOCHS; epoch++) {
   let totalLoss = 0;
 
-  for (const { x, y } of dataset.samples) {
+  for (const { x, y } of datasetObj.samples) {
     const noisyX = x.map(v => v + (Math.random() - 0.5) * NOISE);
     const loss = net.train(noisyX, y);
     totalLoss += loss;
@@ -76,42 +106,19 @@ for (let epoch = 1; epoch <= EPOCHS; epoch++) {
 
   if (epoch % 500 === 0) {
     console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / dataset.samples.length).toFixed(6)}`
+      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / datasetObj.samples.length).toFixed(6)}`
     );
   }
 }
 
+console.timeEnd("Training");
 // -------------------------
-// Sauvegarde du modèle
+// Save model
 // -------------------------
-const model = {
-  meta: {
-    dataset: dataset.name,
-    inputSize: dataset.inputSize,
-    outputSize: dataset.outputSize,
-    task: dataset.task
-  },
-  config: {
-    inputSize: dataset.inputSize,
-    hiddenNeurons: net.hidden.neurons.length,
-    learningRate: net.hidden.neurons[0].learningRate,
-    preprocessing
-  },
-  hidden: {
-    neurons: net.hidden.neurons.map(n => ({
-      weights: n.weights,
-      bias: n.bias
-    }))
-  },
-  output: {
-    neurons: net.output.neurons.map(n => ({
-      weights: n.weights,
-      bias: n.bias
-    }))
-  }
-};
 
-fs.mkdirSync("./model", { recursive: true });
-fs.writeFileSync("./model/model.json", JSON.stringify(model, null, 2));
+const model = net.toJSON();
 
-console.log("Model saved to model/model.json");
+fs.mkdirSync("./models", { recursive: true });
+fs.writeFileSync(`./models/${modelName}.json`, JSON.stringify(model, null, 2));
+
+console.log(`Model saved to models/${modelName}.json`);
