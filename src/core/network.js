@@ -7,22 +7,25 @@ export class Network {
         learningRate = 0.0025,
         preprocessing = null,
         task = "regression",
-        optimizer = "sgd" // sgd, adam, rmsprop
+        optimizer = "sgd",
+        outputSize = 1
     } = {}) {
         this.inputSize = inputSize;
         this.preprocessing = preprocessing;
         this.task = task;
         this.optimizer = optimizer;
+        this.outputSize = outputSize;
 
         this.hidden = new Layer(inputSize, hiddenNeurons, "tanh", learningRate, optimizer);
 
         if (task === "binary-classification") {
             this.output = new Layer(hiddenNeurons, 1, "sigmoid", learningRate, optimizer);
+        } else if (task === "multiclass-classification") {
+            this.output = new Layer(hiddenNeurons, outputSize, "softmax", learningRate, optimizer);
         } else {
-            this.output = new Layer(hiddenNeurons, 1, "linear", learningRate, optimizer);
+            this.output = new Layer(hiddenNeurons, outputSize, "linear", learningRate, optimizer);
         }
 
-        // Compteur d'itérations pour Adam/RMSprop
         this.iteration = 0;
     }
 
@@ -33,7 +36,8 @@ export class Network {
         const net = new Network({
             ...data.config,
             task: data.meta?.task ?? "regression",
-            optimizer: data.config.optimizer || "sgd"
+            optimizer: data.config.optimizer || "sgd",
+            outputSize: data.meta?.outputSize ?? 1
         });
 
         data.hidden.neurons.forEach((saved, i) => {
@@ -93,6 +97,9 @@ export class Network {
         if (this.task === "binary-classification") {
             const eps = 1e-7;
             return -(yTrue * Math.log(yPred + eps) + (1 - yTrue) * Math.log(1 - yPred + eps));
+        } else if (this.task === "multiclass-classification") {
+            const eps = 1e-9;
+            return -yTrue.reduce((s, v, i) => s + v * Math.log(yPred[i] + eps), 0);
         } else {
             return (yPred - yTrue) ** 2;
         }
@@ -110,19 +117,19 @@ export class Network {
         const xNorm = this.normalizeX(x);
 
         const h = this.hidden.forward(xNorm);
-        const yNorm = this.output.forward(h)[0];
+        const yVec = this.output.forward(h);
 
-        return {
-            x,
-            xNorm,
-            h,
-            yNorm,
-            y: this.denormalizeY(yNorm)
-        };
+        return { x, xNorm, h, yVec };
     }
 
     predict(input) {
-        return this.forward(input).y;
+        const out = this.forward(input).yVec;
+
+        if (this.task === "multiclass-classification") {
+            return out;
+        }
+
+        return out[0];
     }
 
     // -------------------------
@@ -134,29 +141,31 @@ export class Network {
         const x = this.ensureVector(input);
         const xNorm = this.normalizeX(x);
 
-        const yTrue = yTrueVec[0];
-
-        const yNorm =
-            this.preprocessing
-                ? yTrue / this.preprocessing.yScale
-                : yTrue;
-
         const h = this.hidden.forward(xNorm);
-        const yPred = this.output.forward(h)[0];
+        const yPred = this.output.forward(h);
 
-        const gradient = this.computeOutputGradient(yPred, yNorm);
+        let gradients;
 
-        const weights = [...this.output.neurons[0].weights];
+        if (this.task === "multiclass-classification") {
+            gradients = yPred.map((p, i) => p - yTrueVec[i]);
+        } else {
+            gradients = [yPred[0] - yTrueVec[0]];
+        }
 
-        this.output.backward([gradient], this.iteration);
+        const weights = this.output.neurons.map(n => [...n.weights]);
+
+        this.output.backward(gradients, this.iteration);
 
         const hiddenErrors = this.hidden.neurons.map((_, i) => {
-            return gradient * weights[i];
+            return gradients.reduce((sum, g, j) => sum + g * weights[j][i], 0);
         });
 
         this.hidden.backward(hiddenErrors, this.iteration);
 
-        return this.computeLoss(yPred, yNorm);
+        return this.computeLoss(
+            this.task === "multiclass-classification" ? yPred : yPred[0],
+            this.task === "multiclass-classification" ? yTrueVec : yTrueVec[0]
+        );
     }
 
     // -------------------------
@@ -168,24 +177,22 @@ export class Network {
         return {
             input: out.x,
             inputNorm: out.xNorm,
-            hidden: this.hidden.neurons.map((n, i) => ({
+            hidden: out.h.map((n, i) => ({
                 neuron: i,
-                z: +n.z.toFixed(6),
-                activation: +n.output.toFixed(6)
+                weight: +n.toFixed(6)
             })),
-            outputNorm: +out.yNorm.toFixed(6),
-            output: +out.y.toFixed(6)
+            output: +out.yVec[0].toFixed(6)
         };
     }
 
     // -------------------------
-    // Sauvegarde
+    // Save
     // -------------------------
     toJSON() {
         return {
             meta: {
                 inputSize: this.inputSize,
-                outputSize: 1,
+                outputSize: this.outputSize,
                 task: this.task
             },
             config: {
@@ -194,7 +201,8 @@ export class Network {
                 learningRate: this.hidden.neurons[0].learningRate,
                 preprocessing: this.preprocessing,
                 optimizer: this.optimizer,
-                iteration: this.iteration
+                iteration: this.iteration,
+                outputSize: this.outputSize
             },
             hidden: {
                 neurons: this.hidden.neurons.map(n => ({

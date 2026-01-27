@@ -17,3 +17,14 @@ export function sigmoidDerivative(x) {
     const s = sigmoid(x);
     return s * (1 - s);
 }
+
+/**
+ * Softmax (appliqué sur un vecteur)
+ * ⚠️ doit être utilisé sur toute la couche de sortie
+ */
+export function softmax(vec) {
+    const max = Math.max(...vec); // stabilité numérique
+    const exps = vec.map(v => Math.exp(v - max));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    return exps.map(v => v / sum);
+}

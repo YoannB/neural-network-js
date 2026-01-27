@@ -62,7 +62,7 @@ const debug = net.debugPredict(input);
 
 console.log("\nHidden:");
 debug.hidden.forEach(h =>
-  console.log(`Neuron ${h.neuron} | z=${h.z} | a=${h.activation}`)
+  console.log(`Neuron ${h.neuron} | a=${h.weight}`)
 );
 
 console.log(`\nOutput: ${debug.output}`);

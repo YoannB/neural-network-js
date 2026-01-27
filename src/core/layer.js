@@ -1,7 +1,10 @@
+import { softmax } from "./activations.js";
 import { Neuron } from "./neuron.js";
 
 export class Layer {
     constructor(inputSize, count, activation, learningRate, optimizer) {
+        this.activation = activation;
+
         this.neurons = Array.from(
             { length: count },
             () => new Neuron(inputSize, activation, learningRate, optimizer)
@@ -9,7 +12,23 @@ export class Layer {
     }
 
     forward(inputs) {
-        this.outputs = this.neurons.map(n => n.forward(inputs));
+        // Calcul classique
+        const raw = this.neurons.map(n => n.forward(inputs));
+
+        // Cas spécial softmax (au niveau couche)
+        if (this.activation === "softmax") {
+            this.outputs = softmax(raw);
+
+            // On met à jour output de chaque neurone pour cohérence/debug
+            this.neurons.forEach((n, i) => {
+                n.output = this.outputs[i];
+            });
+
+            return this.outputs;
+        }
+
+        // Cas normal inchangé
+        this.outputs = raw;
         return this.outputs;
     }
 
@@ -17,7 +36,6 @@ export class Layer {
         this.neurons.forEach((n, i) => n.backward(errors[i], iteration));
     }
 
-    // Utile pour visualiser l'état de la couche
     getWeightStats() {
         const allWeights = this.neurons.flatMap(n => n.weights);
         const mean = allWeights.reduce((s, w) => s + w, 0) / allWeights.length;

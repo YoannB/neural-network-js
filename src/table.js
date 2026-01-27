@@ -19,75 +19,149 @@ const net = Network.load(rawModel);
 
 // -------------------------
 const dataset = getDataset(datasetName);
-const samples = dataset.testSamples ?? dataset.samples;
-const LABEL_WIDTH = Math.max(
-    40,
-    ...samples.map(s => (s.label?.length ?? 0))
-);
+const samples = dataset.samples;
 const task = dataset.task ?? "regression";
 
-// -------------------------
-console.log(
-    [
-        "Input".padEnd(LABEL_WIDTH),
-        "y_true".padEnd(12),
-        "y_pred".padEnd(12),
-        "err_%".padEnd(10),
-        "ok?".padEnd(6)
-    ].join(" | ")
-);
+const hasSplit = Number.isFinite(dataset.indexEndTrain);
 
-console.log("-".repeat(LABEL_WIDTH + 12 + 12 + 10 + 6 + 12));
+const trainSamples = hasSplit
+    ? samples.slice(0, dataset.indexEndTrain)
+    : samples;
+
+const testSamples = hasSplit
+    ? samples.slice(dataset.indexEndTrain)
+    : samples;
 
 // -------------------------
-let correct = 0;
-let falsePositives = 0;
-let falseNegatives = 0;
+function evaluate(samples, title) {
+    const LABEL_WIDTH = Math.max(
+        40,
+        ...samples.map(s => (s.label?.length ?? 0))
+    );
 
-// -------------------------
-samples.forEach(({ x, y, label }) => {
-    const yTrue = y[0];
-    const yPred = net.predict(x);
+    console.log(`\n=== ${title} ===`);
+    console.log(
+        [
+            "Input".padEnd(LABEL_WIDTH),
+            "y_true".padEnd(16),
+            "y_pred".padEnd(16),
+            "err_%".padEnd(10),
+            "ok?".padEnd(6)
+        ].join(" | ")
+    );
 
-    const errPct = yTrue > 0 ? Math.abs(yPred - yTrue) / (Math.abs(yTrue)) * 100 : Math.abs(yPred) * 100;
+    console.log("-".repeat(LABEL_WIDTH + 16 + 16 + 10 + 6 + 12 + 1));
 
-    let isCorrect = false;
+    let correct = 0;
+    let falsePositives = 0;
+    let falseNegatives = 0;
 
-    if (task === "binary-classification") {
-        const predictedClass = yPred >= THRESHOLD ? 1 : 0;
-        isCorrect = predictedClass === yTrue;
+    // >>> ajout pour le streak initial
+    let streak = 0;
+    let streakBroken = false;
 
-        if (isCorrect) correct++;
-        if (predictedClass === 1 && yTrue === 0) falsePositives++;
-        if (predictedClass === 0 && yTrue === 1) falseNegatives++;
-    } else {
-        isCorrect = errPct <= REG_TOLERANCE;
-        if (isCorrect) correct++;
+    for (const { x, y, label } of samples) {
+        let yTrueDisplay = "";
+        let yPredDisplay = "";
+        let errPct = 0;
+        let isCorrect = false;
+
+        if (task === "multiclass-classification") {
+            const yTrueVec = y;
+            const out = net.forward(x);
+            const yPredVec = out?.yNorm ?? net.output?.outputs ?? [];
+
+            const trueClass = yTrueVec.indexOf(Math.max(...yTrueVec));
+            const predClass = yPredVec.indexOf(Math.max(...yPredVec));
+
+            yTrueDisplay = trueClass.toString();
+            yPredDisplay = predClass.toString();
+
+            isCorrect = trueClass === predClass;
+            errPct = isCorrect ? 0 : 100;
+        }
+
+        else if (task === "binary-classification") {
+            const yTrue = y[0];
+            const yPred = net.predict(x);
+
+            errPct = yTrue > 0
+                ? Math.abs(yPred - yTrue) / Math.abs(yTrue) * 100
+                : Math.abs(yPred) * 100;
+
+            const predictedClass = yPred >= THRESHOLD ? 1 : 0;
+            isCorrect = predictedClass === yTrue;
+
+            if (predictedClass === 1 && yTrue === 0) falsePositives++;
+            if (predictedClass === 0 && yTrue === 1) falseNegatives++;
+
+            yTrueDisplay = yTrue.toFixed(6);
+            yPredDisplay = yPred.toFixed(6);
+        }
+
+        else {
+            const yTrue = y[0];
+            const yPred = net.predict(x);
+
+            errPct = yTrue > 0
+                ? Math.abs(yPred - yTrue) / Math.abs(yTrue) * 100
+                : Math.abs(yPred) * 100;
+
+            isCorrect = errPct <= REG_TOLERANCE;
+
+            yTrueDisplay = yTrue.toFixed(6);
+            yPredDisplay = yPred.toFixed(6);
+        }
+
+        // >>> logique commune centralisée
+        if (isCorrect) {
+            correct++;
+            if (!streakBroken) streak++;
+        } else {
+            streakBroken = true;
+        }
+
+        const inputStr = label
+            ? label.padEnd(LABEL_WIDTH)
+            : JSON.stringify(x).slice(0, 37).padEnd(LABEL_WIDTH);
+
+        if (title !== "TRAIN")
+            console.log([
+                inputStr,
+                yTrueDisplay.padEnd(16),
+                yPredDisplay.padEnd(16),
+                errPct.toFixed(2).padEnd(10),
+                (isCorrect ? "OK" : "KO").padEnd(6)
+            ].join(" | "));
     }
 
-    const inputStr = label
-        ? label.padEnd(LABEL_WIDTH)
-        : JSON.stringify(x).slice(0, 37).padEnd(LABEL_WIDTH);
+    const accuracy = (correct / samples.length) * 100;
 
-    console.log([
-        inputStr,
-        yTrue.toFixed(6).padEnd(12),
-        yPred.toFixed(6).padEnd(12),
-        errPct.toFixed(2).padEnd(10),
-        (isCorrect ? "OK" : "KO").padEnd(6)
-    ].join(" | "));
-});
+    console.log(`\nRésumé (${title}) :`);
+    console.log(`Task           : ${task}`);
+    console.log(`Samples        : ${samples.length}`);
+    console.log(`Accuracy       : ${accuracy.toFixed(2)} %`);
+
+    if (title === "TEST") {
+        console.log(`Initial streak : ${streak}`);
+    }
+
+    if (task === "binary-classification") {
+        console.log(`False positives: ${falsePositives}`);
+        console.log(`False negatives: ${falseNegatives}`);
+    }
+
+    return accuracy;
+}
 
 // -------------------------
-const total = samples.length;
-const accuracy = (correct / total) * 100;
+if (hasSplit) {
+    const trainAcc = evaluate(trainSamples, "TRAIN");
+    const testAcc = evaluate(testSamples, "TEST");
 
-console.log("\nRésumé:");
-console.log(`Task           : ${task}`);
-console.log(`Samples        : ${total}`);
-console.log(`Accuracy       : ${accuracy.toFixed(2)} %`);
-
-if (task === "binary-classification") {
-    console.log(`False positives: ${falsePositives}`);
-    console.log(`False negatives: ${falseNegatives}`);
+    console.log("\n=== Global ===");
+    console.log(`Train accuracy : ${trainAcc.toFixed(2)} %`);
+    console.log(`Test accuracy  : ${testAcc.toFixed(2)} %`);
+} else {
+    evaluate(samples, "DATASET");
 }

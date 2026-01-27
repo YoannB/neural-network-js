@@ -59,9 +59,6 @@ export class Neuron {
       this.output = tanh(this.z);
     } else if (this.activation === "sigmoid") {
       this.output = sigmoid(this.z);
-    } else if (this.activation === "softmax") {
-      // ⚠️ Softmax est appliqué au niveau Layer, pas ici
-      this.output = this.z;
     } else {
       this.output = this.z;
     }
@@ -140,11 +137,9 @@ export class Neuron {
       this.m[i] = this.beta1 * this.m[i] + (1 - this.beta1) * clippedGrad;
       this.v[i] = this.beta2 * this.v[i] + (1 - this.beta2) * clippedGrad * clippedGrad;
 
-      // Correction du biais
       const mHat = this.m[i] / (1 - Math.pow(this.beta1, iteration));
       const vHat = this.v[i] / (1 - Math.pow(this.beta2, iteration));
 
-      // Mise à jour du poids
       const update = this.learningRate * mHat / (Math.sqrt(vHat) + this.epsilon);
       const newW = w - update;
 
@@ -152,7 +147,6 @@ export class Neuron {
       return newW;
     });
 
-    // Mise à jour du biais
     const gradBias = delta;
     const clippedGradBias = Math.max(-5, Math.min(5, gradBias));
 
@@ -169,7 +163,6 @@ export class Neuron {
   updateRMSprop(delta) {
     const decay = 0.9;
 
-    // Mise à jour des poids
     this.weights = this.weights.map((w, i) => {
       const input = this.inputs[i];
       if (!Number.isFinite(input)) return w;
@@ -177,10 +170,8 @@ export class Neuron {
       const grad = delta * input;
       const clippedGrad = Math.max(-5, Math.min(5, grad));
 
-      // Mise à jour du second moment
       this.v[i] = decay * this.v[i] + (1 - decay) * clippedGrad * clippedGrad;
 
-      // Mise à jour du poids
       const update = this.learningRate * clippedGrad / (Math.sqrt(this.v[i]) + this.epsilon);
       const newW = w - update;
 
@@ -188,7 +179,6 @@ export class Neuron {
       return newW;
     });
 
-    // Mise à jour du biais
     const gradBias = delta;
     const clippedGradBias = Math.max(-5, Math.min(5, gradBias));
 

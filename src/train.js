@@ -14,6 +14,7 @@ const modelName = dataset;
 
 const datasetObj = getDataset(dataset);
 
+// -------------------------
 console.log(`Dataset    : ${datasetObj.name}`);
 console.log(`Model name : ${modelName}`);
 console.log(`Samples    : ${datasetObj.samples.length}`);
@@ -21,12 +22,15 @@ console.log(`Input size : ${datasetObj.inputSize}`);
 console.log(`Output size: ${datasetObj.outputSize}`);
 console.log(`Task       : ${datasetObj.task}`);
 
+if (Number.isFinite(datasetObj.indexEndTrain)) {
+  console.log(`Index end train: ${datasetObj.indexEndTrain}`);
+}
+
 // -------------------------
 // Hyperparams
 // -------------------------
 
 const args = process.argv.slice(argsStartIndex);
-
 
 function getArg(name, defaultValue) {
   const index = args.indexOf(`--${name}`);
@@ -34,7 +38,6 @@ function getArg(name, defaultValue) {
     const value = args[index + 1];
     if (value === undefined) return defaultValue;
 
-    // Support valeurs numériques et strings
     const numValue = Number(value);
     if (Number.isFinite(numValue)) return numValue;
     return value;
@@ -46,9 +49,21 @@ const EPOCHS = getArg("epochs", 10000);
 const NEURONS = getArg("neurons", 10);
 const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
-const OPTIMIZER = getArg("optimizer", "adam"); // sgd, adam, rmsprop
+const OPTIMIZER = getArg("optimizer", "adam");
 
 console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER });
+
+// -------------------------
+// Dataset split logique
+// -------------------------
+
+const allSamples = datasetObj.samples;
+
+const trainSamples = Number.isFinite(datasetObj.indexEndTrain)
+  ? allSamples.slice(0, datasetObj.indexEndTrain)
+  : allSamples;
+
+console.log(`Training samples: ${trainSamples.length}`);
 
 // -------------------------
 // Preprocessing
@@ -75,7 +90,7 @@ function computePreprocessing(samples) {
   };
 }
 
-const preprocessing = computePreprocessing(datasetObj.samples);
+const preprocessing = computePreprocessing(trainSamples);
 
 // -------------------------
 // Network
@@ -83,6 +98,7 @@ const preprocessing = computePreprocessing(datasetObj.samples);
 
 const net = new Network({
   inputSize: datasetObj.inputSize,
+  outputSize: datasetObj.outputSize,
   hiddenNeurons: NEURONS,
   learningRate: LR,
   preprocessing,
@@ -95,23 +111,32 @@ const net = new Network({
 // -------------------------
 
 console.time("Training");
+
 for (let epoch = 1; epoch <= EPOCHS; epoch++) {
   let totalLoss = 0;
 
-  for (const { x, y } of datasetObj.samples) {
+  for (const { x, y } of trainSamples) {
     const noisyX = x.map(v => v + (Math.random() - 0.5) * NOISE);
     const loss = net.train(noisyX, y);
     totalLoss += loss;
   }
 
-  if (epoch % 500 === 0) {
+  if (epoch % 500 === 0 || epoch === 1) {
     console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / datasetObj.samples.length).toFixed(6)}`
+      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
     );
+  }
+
+  if (totalLoss < 0) {
+    console.log(
+      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
+    );
+    break;
   }
 }
 
 console.timeEnd("Training");
+
 // -------------------------
 // Save model
 // -------------------------
