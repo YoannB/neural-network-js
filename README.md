@@ -77,3 +77,7 @@ Accuracy       : 100.00 %
 ```
 
 Les classes sont numérotées 0 (pierre), 1 (feuille) et 2 (ciseaux).
+
+## Licence
+
+[MIT](LICENSE)
