@@ -18,7 +18,7 @@ const rawModel = JSON.parse(
 const net = Network.load(rawModel);
 
 // -------------------------
-const dataset = getDataset(datasetName);
+const dataset = await getDataset(datasetName);
 const samples = dataset.samples;
 const task = dataset.task ?? "regression";
 

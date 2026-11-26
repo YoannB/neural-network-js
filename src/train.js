@@ -13,7 +13,7 @@ let argsStartIndex = 3;
 
 const modelName = dataset;
 
-const datasetObj = getDataset(dataset);
+const datasetObj = await getDataset(dataset);
 
 // -------------------------
 console.log(`Dataset    : ${datasetObj.name}`);

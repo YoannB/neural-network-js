@@ -6,7 +6,14 @@ import sharp from "sharp";
 const IMAGE_DIR = "./tmp/oranges";
 const SIZE = 32;
 
-async function loadImages() {
+export default async function loadImages() {
+    if (!fs.existsSync(IMAGE_DIR)) {
+        throw new Error(
+            `Dossier ${IMAGE_DIR} introuvable : place les images .jpg du jeu "images" dans ce dossier ` +
+            `(voir scripts/download-oranges.js).`
+        );
+    }
+
     const files = fs.readdirSync(IMAGE_DIR).filter(f => f.endsWith(".jpg"));
 
     const samples = [];
@@ -58,4 +65,3 @@ async function loadImages() {
     };
 }
 
-export default await loadImages();
