@@ -59,7 +59,39 @@ npm run exec -- rps 1 0 0
 
 Options de `train` : `--epochs`, `--neurons`, `--lr`, `--noise`, `--optimizer` (`sgd`, `adam`, `rmsprop`), `--seed`, `--target-loss`.
 
-Jeux de données : `linear`, `square`, `xor`, `primes`, `rps`, `images`. Le jeu `images` lit les fichiers `.jpg` de `tmp/oranges/` : `_ok` dans le nom pour une orange, sinon une autre image. Le script `scripts/download-oranges.js` télécharge des images (il demande une clé d'API Pixabay dans `PIXABAY_API_KEY`).
+Sous Windows PowerShell 5.1, `npm run train -- rps --epochs 500` peut perdre le `--`, et les options ne sont alors pas transmises. Dans ce cas, appelle les scripts directement : `node src/train.js rps --epochs 500`.
+
+Jeux de données : `linear`, `square`, `xor`, `primes`, `rps`, `images`.
+
+### Préparer le jeu `images`
+
+Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas versionné. L'étiquette vient du nom du fichier : `_ok` dans le nom pour une orange (classe 1), sinon une autre image (classe 0).
+
+1. Crée une clé d'API gratuite sur [Pixabay](https://pixabay.com/api/docs/) et mets-la dans un fichier `.env.local` à la racine du projet. Ce fichier n'est pas versionné : le `.gitignore` exclut `.env` et `.env.*`.
+
+   ```
+   PIXABAY_API_KEY=ta_clé
+   ```
+
+2. Télécharge 100 images. Node ne lit pas les fichiers `.env` tout seul : l'option `--env-file` (Node 20.6 ou plus) s'en charge.
+
+   ```sh
+   node --env-file=.env.local scripts/download-oranges.js
+   ```
+
+   Sans cette option, il faut définir la variable `PIXABAY_API_KEY` dans le terminal.
+
+3. Trie les images à la main. Le script les nomme `orange_1.jpg`, `orange_2.jpg`… : sans `_ok` dans le nom, elles seraient toutes de la classe 0 et le réseau n'aurait rien à apprendre. Renomme chaque fichier :
+   - `orange_12_ok.jpg` pour une vraie orange ;
+   - `orange_13_ko.jpg` pour une image que le réseau doit rejeter.
+
+4. Entraîne puis évalue. Avec la descente de gradient simple, la perte baisse régulièrement ; avec Adam, elle oscille sur ce jeu.
+
+   ```sh
+   node src/train.js images --optimizer sgd --epochs 3000
+   node src/table.js images
+   node src/exec.js images chemin/vers/une-image.jpg
+   ```
 
 ## Exemples d'exécution
 
