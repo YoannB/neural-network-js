@@ -1,7 +1,8 @@
 import fs from "fs";
 import { Network } from "./core/network.js";
 import getDataset from "./datasets/index.js";
-import { random, setSeed } from "./core/random.js";
+import { setSeed } from "./core/random.js";
+import { trainNetwork } from "./core/training.js";
 
 // -------------------------
 // CLI parsing (cohérent avec exec.js)
@@ -38,6 +39,7 @@ const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
 const SEED = getArg("seed", 42);
+const TARGET_LOSS = getArg("target-loss", 0.0001);
 
 const datasetObj = await getDataset(dataset, { seed: SEED });
 
@@ -49,7 +51,7 @@ console.log(`Input size : ${datasetObj.inputSize}`);
 console.log(`Output size: ${datasetObj.outputSize}`);
 console.log(`Task       : ${datasetObj.task}`);
 
-console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED });
+console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
 
 setSeed(SEED);
 
@@ -112,27 +114,19 @@ const net = new Network({
 
 console.time("Training");
 
-for (let epoch = 1; epoch <= EPOCHS; epoch++) {
-  let totalLoss = 0;
-
-  for (const { x, y } of trainSamples) {
-    const noisyX = x.map(v => v + (random() - 0.5) * NOISE);
-    const loss = net.train(noisyX, y);
-    totalLoss += loss;
+const result = trainNetwork(net, trainSamples, {
+  epochs: EPOCHS,
+  noise: NOISE,
+  targetLoss: TARGET_LOSS,
+  onEpoch: ({ epoch, loss, last }) => {
+    if (epoch === 1 || epoch % 500 === 0 || last) {
+      console.log(`Epoch ${epoch}/${EPOCHS} - Loss: ${loss.toFixed(6)}`);
+    }
   }
+});
 
-  if (epoch % 500 === 0 || epoch === 1) {
-    console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
-    );
-  }
-
-  if (totalLoss < 0) {
-    console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
-    );
-    break;
-  }
+if (result.reachedTarget) {
+  console.log(`Perte cible ${TARGET_LOSS} atteinte à l'époque ${result.epochs}`);
 }
 
 console.timeEnd("Training");

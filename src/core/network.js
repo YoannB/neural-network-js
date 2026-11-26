@@ -95,11 +95,13 @@ export class Network {
     // -------------------------
     computeLoss(yPred, yTrue) {
         if (this.task === "binary-classification") {
+            // Les probabilités sont bornées pour éviter log(0) ; la perte reste >= 0.
             const eps = 1e-7;
-            return -(yTrue * Math.log(yPred + eps) + (1 - yTrue) * Math.log(1 - yPred + eps));
+            const p = Math.min(Math.max(yPred, eps), 1 - eps);
+            return -(yTrue * Math.log(p) + (1 - yTrue) * Math.log(1 - p));
         } else if (this.task === "multiclass-classification") {
             const eps = 1e-9;
-            return -yTrue.reduce((s, v, i) => s + v * Math.log(yPred[i] + eps), 0);
+            return -yTrue.reduce((s, v, i) => s + v * Math.log(Math.max(yPred[i], eps)), 0);
         } else {
             return (yPred - yTrue) ** 2;
         }
