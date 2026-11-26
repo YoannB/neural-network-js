@@ -1,5 +1,6 @@
 import { getArg, parseTrainingOptions } from "./cli.js";
-import { runExperiment, accuracy } from "./core/experiment.js";
+import { runExperiment } from "./experiment.js";
+import { accuracy } from "./core/metrics.js";
 
 // node dist/src/evaluate.js <dataset> --seeds 1-10 [options d'entraînement]
 // Entraîne une fois par graine. Chaque graine change la séparation

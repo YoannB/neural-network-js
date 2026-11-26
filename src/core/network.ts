@@ -1,5 +1,8 @@
 import { Layer } from "./layer.js";
-import type { HiddenActivation, ModelJSON, Optimizer, OutputActivation, Preprocessing, SavedLayer, Task } from "./types.js";
+import { createRandom, random } from "./random.js";
+import { trainNetwork, type TrainOptions, type TrainResult } from "./training.js";
+import { evaluate, type Evaluation } from "./metrics.js";
+import type { HiddenActivation, ModelJSON, Optimizer, OutputActivation, Preprocessing, Sample, SavedLayer, Task } from "./types.js";
 
 // Activation de la couche de sortie selon la tâche.
 const OUTPUT_ACTIVATIONS: Record<Task, OutputActivation> = {
@@ -23,6 +26,11 @@ export interface NetworkOptions {
     optimizer?: Optimizer;
     outputSize?: number;
     l2?: number;
+    /**
+     * Graine de l'initialisation des poids. Sans graine, le générateur partagé
+     * est utilisé (fixé par setSeed, ou Math.random par défaut).
+     */
+    seed?: number;
 }
 
 export interface ForwardResult {
@@ -56,7 +64,8 @@ export class Network {
         task = "regression",
         optimizer = "sgd",
         outputSize = 1,
-        l2 = 0
+        l2 = 0,
+        seed
     }: NetworkOptions = {}) {
         if (!(task in OUTPUT_ACTIVATIONS)) {
             throw new Error(`Tâche inconnue: ${task}`);
@@ -81,13 +90,14 @@ export class Network {
         this.l2 = l2;
 
         // Couches cachées puis couche de sortie : chacune reçoit la sortie de la précédente.
+        const rand = seed === undefined ? random : createRandom(seed);
         this.layers = [];
         let previousSize = inputSize;
         for (const size of sizes) {
-            this.layers.push(new Layer(previousSize, size, activation, learningRate, optimizer, l2));
+            this.layers.push(new Layer(previousSize, size, activation, learningRate, optimizer, l2, rand));
             previousSize = size;
         }
-        this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer, l2));
+        this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer, l2, rand));
     }
 
     get output(): Layer {
@@ -258,6 +268,16 @@ export class Network {
 
         const multiclass = this.task === "multiclass-classification";
         return this.computeLoss(multiclass ? yPred : yPred[0], multiclass ? yTrueVec : yTrueVec[0]);
+    }
+
+    /** Entraîne le réseau sur des exemples (voir trainNetwork pour les options). */
+    fit(samples: Sample[], options: TrainOptions = {}): TrainResult {
+        return trainNetwork(this, samples, options);
+    }
+
+    /** Perte moyenne et part des exemples bien prédits. */
+    evaluate(samples: Sample[]): Evaluation {
+        return evaluate(this, samples);
     }
 
     // -------------------------
