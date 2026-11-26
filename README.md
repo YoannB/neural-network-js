@@ -6,7 +6,7 @@ Un réseau de neurones écrit en JavaScript pur (Node.js, sans bibliothèque d'a
 
 ## Branche `claude-improvement`
 
-Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claude, à partir de l'étape 8. Elle montre comment le code peut évoluer vers un mini framework testé, puis vers TypeScript.
+Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claude, à partir de l'étape 8. Elle fait évoluer le code vers un mini framework testé, écrit en TypeScript et utilisable comme bibliothèque.
 
 - La branche `main` reste le projet de base (étapes 1 à 8) et ne reçoit pas ces évolutions.
 - Chaque évolution arrive par une pull request relue avant d'être fusionnée dans cette branche, et chaque étape franchie porte un tag `claude-NN-…`.
@@ -32,7 +32,8 @@ Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claud
 | `claude-01-fiabilite` | Corrections, graine aléatoire, séparation entraînement / test, tests |
 | `claude-02-api` | Couches cachées configurables, sauvegarde complète des optimiseurs, nettoyage |
 | `claude-03-images` | Évaluation sur plusieurs graines, options d'image, augmentation, L2, arrêt sur validation |
-| **`claude-04-typescript`** | **Portage en TypeScript strict, comportement identique** |
+| `claude-04-typescript` | Portage en TypeScript strict, comportement identique |
+| **`claude-05-framework`** | **Mini framework : API publique, paquet sans dépendance, exemples** |
 
 Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js 22 ou plus pour cette branche (Node.js 18 suffit pour les tags précédents).
 
@@ -47,6 +48,8 @@ npm run train -- rps
 npm run table -- rps
 npm run exec -- rps 1 0 0
 ```
+
+Exemples d'utilisation de la bibliothèque : `npm run example:xor` et `npm run example:sine` (voir l'étape `claude-05`).
 
 Options de `train` et `evaluate` :
 
@@ -88,6 +91,96 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
    node dist/src/table.js images
    node dist/src/exec.js images chemin/vers/une-image.jpg
    ```
+
+## claude-05 — Mini framework
+
+Le réseau devient une bibliothèque : un point d'entrée (`src/index.ts`), une API pour entraîner et évaluer, des déclarations de types, et aucune dépendance. Les jeux de données et les scripts `train`, `table`, `exec`, `evaluate` restent dans le dépôt comme outils et exemples.
+
+### Utiliser la bibliothèque
+
+```sh
+npm install github:YoannB/neural-network-js#claude-improvement
+```
+
+L'installation depuis git compile le paquet (script `prepare`). Node.js 22 ou plus.
+
+```ts
+import { Network, type Sample } from "neural-network-js";
+
+const xor: Sample[] = [
+    { x: [0, 0], y: [0] }, { x: [0, 1], y: [1] },
+    { x: [1, 0], y: [1] }, { x: [1, 1], y: [0] }
+];
+
+const net = new Network({ inputSize: 2, hiddenLayers: [8], task: "binary-classification", optimizer: "adam", seed: 1 });
+net.fit(xor, { epochs: 10000, targetLoss: 0.001 });
+
+net.predictValue([1, 0]);   // probabilité de la classe 1
+net.evaluate(xor);          // { loss, accuracy, samples }
+
+const saved = JSON.stringify(net);          // modèle sauvegardé
+const copy = Network.load(JSON.parse(saved));
+```
+
+### API
+
+| Élément | Rôle |
+|---|---|
+| `new Network(options)` | `inputSize`, `hiddenLayers` (par exemple `[16, 8]`), `activation` (`tanh`, `relu`, `leakyrelu`, `sigmoid`), `task` (`regression`, `binary-classification`, `multiclass-classification`), `outputSize`, `optimizer` (`sgd`, `adam`, `rmsprop`), `learningRate`, `l2`, `preprocessing`, `seed` |
+| `net.fit(samples, options)` | Entraîne : `epochs`, `targetLoss`, `noise`, `validation` (exemples), `patience`, `evaluateEvery`, `onEpoch`. Renvoie le nombre d'époques, la perte et la raison de l'arrêt. |
+| `net.predictValue(x)` | Valeur en régression, probabilité de la classe 1 en classification binaire. |
+| `net.predictProbabilities(x)` | Probabilité de chaque classe en multiclasse. |
+| `net.evaluate(samples)` | `{ loss, accuracy, samples }` |
+| `net.toJSON()`, `Network.load(json)` | Sauvegarde et chargement (les modèles des étapes précédentes se chargent aussi). |
+| `splitSamples(samples, { testRatio, seed })` | Séparation entraînement / test avec graine. |
+| `computePreprocessing(samples)` | Échelle des entrées, calculée sur les exemples d'entraînement. |
+| `createRandom`, `setSeed`, `shuffle` | Générateur aléatoire à graine. |
+| `trainNetwork`, `meanLoss`, `accuracy`, `evaluate` | Les mêmes fonctions, hors de la classe. |
+| `Layer`, `Neuron`, `activations` | Les briques internes, pour les lire ou les essayer. |
+
+Les types (`Sample`, `Task`, `ModelJSON`…) sont exportés avec.
+
+### Ce qui a changé
+
+- **Point d'entrée** `src/index.ts`, et `Network.fit` / `Network.evaluate` en plus des fonctions existantes.
+- **`seed` dans les options du réseau** : l'initialisation des poids utilise son propre générateur, sans toucher au générateur partagé.
+- **Cœur sans dépendance** : `src/core` n'importe ni module Node.js ni `sharp` (un test le vérifie), et fonctionne donc aussi dans un navigateur. `sharp` devient une dépendance de développement, utilisée par le jeu `images` et `exec`.
+- **Paquet** : `exports` et `types` pointent vers le code compilé ; seul le cœur est publié (36 fichiers, 27 ko). Installé dans un projet vide depuis `npm pack`, il n'apporte aucune dépendance et se compile en TypeScript strict sans les types de Node.js.
+- **Exemples** (`examples/`) qui n'utilisent que l'API publique.
+- **Tests** : 43, dont les tests de l'API publique. Les 9 entraînements de référence de `claude-04` donnent toujours les mêmes modèles, octet pour octet.
+
+### Exemples (claude-05)
+
+```
+$ npm run example:xor          (sans les lignes de npm)
+Perte 0.000999 après 2630 époques
+0 XOR 0 = 0   prédit : 0.0002
+0 XOR 1 = 1   prédit : 0.9989
+1 XOR 0 = 1   prédit : 0.9985
+1 XOR 1 = 0   prédit : 0.0013
+Exactitude : 100 %
+```
+
+```
+$ npm run example:sine          (sans les lignes de npm)
+Époque 500 - perte 0.001791
+Époque 1000 - perte 0.000587
+Époque 1500 - perte 0.000166
+Époque 2000 - perte 0.000151
+
+2000 époques
+Écart moyen sur les 160 points d'entraînement : 0.0086
+Écart moyen sur les 40 points jamais vus      : 0.0088
+
+x        sin(x)    prédit
+ 1.721    0.9888    1.0000
+-0.837   -0.7424   -0.7346
+ 1.310    0.9663    0.9826
+-0.521   -0.4977   -0.4880
+ 1.216    0.9376    0.9539
+```
+
+Sur `sin(x)`, le réseau est aussi précis sur les points qu'il n'a jamais vus que sur ceux qui ont servi à l'entraînement : il a appris la fonction, pas les points. C'est l'inverse du jeu `images` de l'étape `claude-03`, où le score de test reste proche du hasard.
 
 ## claude-04 — TypeScript
 
