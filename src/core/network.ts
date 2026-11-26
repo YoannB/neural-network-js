@@ -16,7 +16,7 @@ export const HIDDEN_ACTIVATIONS: readonly HiddenActivation[] = ["tanh", "relu", 
 export interface NetworkOptions {
     inputSize?: number;
     /** Nombre de neurones de chaque couche cachée, par exemple [16, 8]. */
-    hiddenLayers?: number[] | null;
+    hiddenLayers?: readonly number[] | null;
     /** Une seule couche cachée (utilisé si hiddenLayers est absent). */
     hiddenNeurons?: number;
     activation?: HiddenActivation;
