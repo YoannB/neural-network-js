@@ -2,7 +2,9 @@ import { relu, reluDerivative, leakyRelu, leakyReluDerivative, tanh, tanhDerivat
 import { random } from "./random.js";
 
 export class Neuron {
-  constructor(inputSize, activation = "leakyrelu", learningRate = 0.0025, optimizer = "sgd") {
+  // l2 : pénalité sur les poids (weight decay), qui ajoute l2 × w au gradient de
+  // chaque poids et pousse les poids vers 0. Le biais n'est pas pénalisé.
+  constructor(inputSize, activation = "leakyrelu", learningRate = 0.0025, optimizer = "sgd", l2 = 0) {
     const scale = Math.sqrt(2 / inputSize);
     this.weights = Array.from(
       { length: inputSize },
@@ -12,6 +14,7 @@ export class Neuron {
     this.learningRate = Number(learningRate) || 0.0025;
     this.activation = activation;
     this.optimizer = optimizer;
+    this.l2 = l2;
 
     // Pour Adam et RMSprop
     this.m = Array(inputSize).fill(0); // Premier moment
@@ -118,7 +121,7 @@ export class Neuron {
         return w;
       }
 
-      const grad = delta * input;
+      const grad = delta * input + this.l2 * w;
       const clippedGrad = clip(grad, 5);
       const newW = w - this.learningRate * clippedGrad;
 
@@ -139,7 +142,7 @@ export class Neuron {
       const input = this.inputs[i];
       if (!Number.isFinite(input)) return w;
 
-      const grad = delta * input;
+      const grad = delta * input + this.l2 * w;
 
       // Clip gradient
       const clippedGrad = Math.max(-5, Math.min(5, grad));
@@ -178,7 +181,7 @@ export class Neuron {
       const input = this.inputs[i];
       if (!Number.isFinite(input)) return w;
 
-      const grad = delta * input;
+      const grad = delta * input + this.l2 * w;
       const clippedGrad = Math.max(-5, Math.min(5, grad));
 
       this.v[i] = decay * this.v[i] + (1 - decay) * clippedGrad * clippedGrad;

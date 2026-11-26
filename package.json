@@ -7,6 +7,7 @@
     "train": "node src/train.js",
     "exec": "node src/exec.js",
     "table": "node src/table.js",
+    "evaluate": "node src/evaluate.js",
     "test": "node --test"
   },
   "dependencies": {

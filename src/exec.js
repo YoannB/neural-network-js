@@ -1,5 +1,5 @@
 import fs from "fs";
-import sharp from "sharp";
+import { imageToVector } from "./datasets/image-features.js";
 import { Network } from "./core/network.js";
 
 const dataset = process.argv[2];
@@ -29,16 +29,11 @@ if (!args.length) {
 
 let input;
 
-// image
+// image : même préparation qu'à l'entraînement. Les options sont enregistrées
+// dans le modèle ; un ancien modèle est en niveaux de gris, de côté sqrt(inputSize).
 if (fs.existsSync(args[0])) {
-  const size = Math.sqrt(inputSize);
-  const buffer = await sharp(args[0])
-    .resize(size, size)
-    .grayscale()
-    .raw()
-    .toBuffer();
-
-  input = Array.from(buffer).map(v => v / 255);
+  const imageOptions = rawModel.config.dataset ?? { size: Math.sqrt(inputSize), mode: "gray" };
+  input = await imageToVector(args[0], imageOptions);
 }
 
 // json

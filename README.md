@@ -30,7 +30,8 @@ Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claud
 | `step-07-optimizers` | Optimiseurs Adam et RMSprop |
 | `step-08-multiclass` | Classification multiclasse ← version de `main` |
 | `claude-01-fiabilite` | Corrections, graine aléatoire, séparation entraînement / test, tests |
-| **`claude-02-api`** | **Couches cachées configurables, sauvegarde complète des optimiseurs, nettoyage** |
+| `claude-02-api` | Couches cachées configurables, sauvegarde complète des optimiseurs, nettoyage |
+| **`claude-03-images`** | **Évaluation sur plusieurs graines, options d'image, augmentation, L2, arrêt sur validation** |
 
 Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js 18 ou plus.
 
@@ -46,7 +47,13 @@ npm run table -- rps
 npm run exec -- rps 1 0 0
 ```
 
-Options de `train` : `--epochs`, `--layers` (par exemple `16,8`), `--neurons` (une seule couche), `--activation`, `--lr`, `--noise`, `--optimizer` (`sgd`, `adam`, `rmsprop`), `--seed`, `--target-loss`.
+Options de `train` et `evaluate` :
+
+- réseau et entraînement : `--epochs`, `--layers` (par exemple `16,8`), `--neurons` (une seule couche), `--activation`, `--lr`, `--noise`, `--optimizer` (`sgd`, `adam`, `rmsprop`), `--seed`, `--target-loss` ;
+- contre l'apprentissage par cœur : `--l2`, `--validation` (part des exemples d'entraînement mise de côté, par exemple `0.2`), `--patience`, `--augment flip` ;
+- jeu `images` : `--image-size`, `--image-mode` (`gray`, `rgb`, `hist`).
+
+`npm run evaluate -- <dataset> --seeds 1-10 [options]` entraîne une fois par graine et donne la moyenne et la dispersion du score sur les exemples de test.
 
 Sous Windows PowerShell 5.1, `npm run train -- rps --epochs 500` peut perdre le `--`, et les options ne sont alors pas transmises. Dans ce cas, appelle les scripts directement : `node src/train.js rps --epochs 500`.
 
@@ -77,6 +84,65 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
    node src/table.js images
    node src/exec.js images chemin/vers/une-image.jpg
    ```
+
+## claude-03 — Images : mesurer avant de conclure
+
+L'étape 1 de cette branche a montré que le réseau apprend par cœur les images d'entraînement sans reconnaître les autres. Cette étape ajoute de quoi mesurer proprement et essaie les pistes habituelles.
+
+- **`evaluate`** (`src/evaluate.js`) : un même réglage est entraîné avec plusieurs graines. Chaque graine change la séparation entraînement / test et l'initialisation, ce qui évite de conclure sur un seul tirage de 20 images de test. L'entraînement commun à `train` et `evaluate` est dans `src/core/experiment.js`.
+- **Options d'image** (`src/datasets/image-features.js`) : `--image-size` et `--image-mode` : `gray` (comme avant), `rgb` (la couleur, trois valeurs par pixel) ou `hist` (20 valeurs : la répartition des teintes, saturations et luminosités, sans la position des pixels).
+- **Contre l'apprentissage par cœur** : `--augment flip` ajoute les images miroir des exemples d'entraînement ; `--l2` pénalise les grands poids ; `--validation 0.2` met de côté 20 % des exemples d'entraînement, arrête l'entraînement quand leur perte ne s'améliore plus et garde les meilleurs poids.
+- **`exec` prépare l'image comme l'entraînement** : il la recadrait alors que le jeu de données l'étire (voir les notes par étape).
+- **Tests** : 37 tests, dont les modes d'image sur des images construites, l'effet de L2 et l'arrêt sur validation.
+
+### Résultats sur le jeu `images`
+
+100 images (48 oranges), 80 pour l'entraînement et 20 pour le test, 10 graines, descente de gradient simple, 3000 époques, une couche cachée de 10 neurones :
+
+| Réglage | Train | Test |
+|---|---|---|
+| `gray` 32 × 32 (comme à l'étape 6) | 100 % | 46,5 % ± 13,0 |
+| `gray` 16 × 16 | 100 % | 47,0 % ± 13,5 |
+| `rgb` 16 × 16 | 100 % | 56,5 % ± 9,0 |
+| `rgb` 16 × 16, `--augment flip` | 100 % | 55,0 % ± 10,7 |
+| `rgb` 16 × 16, `--l2 0.001` | 100 % | 56,5 % ± 8,7 |
+| `rgb` 16 × 16, `--validation 0.2` | 60,0 % | 53,0 % ± 10,3 |
+| `rgb` 16 × 16, les trois | 57,9 % | 49,5 % ± 9,9 |
+| `hist` | 80,5 % | 58,5 % ± 10,3 |
+| `hist`, Adam | 100 % | 57,5 % ± 11,2 |
+
+Répondre toujours « orange » donnerait environ 52 % sur ces mêmes tirages de test.
+
+**Aucun réglage ne reconnaît vraiment les oranges.** La couleur fait gagner une dizaine de points sur le niveau de gris, mais l'écart entre graines (± 9 à 13 points sur 20 images) reste du même ordre que tous les écarts du tableau. L'augmentation et L2 ne changent rien de mesurable. Avec la validation, l'entraînement s'arrête au bout de 500 époques environ : la perte de validation ne s'améliore presque jamais, signe que ce qui est appris sur les images d'entraînement ne se transfère pas.
+
+La raison tient surtout aux données : les images rejetées (`_ko`) sont elles aussi presque toutes orange (mandarines, abricots, potirons, oranges épluchées ou sanguines). Les distinguer demande de reconnaître une forme et une texture, pas une couleur. Un réseau entièrement connecté, qui voit chaque pixel séparément, n'en est pas capable avec 80 images. Les pistes suivantes sont beaucoup plus d'images et une couche de convolution.
+
+Ces chiffres dépendent des images : avec un autre téléchargement ou un autre tri, ils changeront.
+
+### Exemples (claude-03)
+
+```
+$ npm run evaluate -- images --seeds 1-10 --epochs 3000 --optimizer sgd --image-mode hist
+Dataset : images
+Options : --epochs 3000 --optimizer sgd --image-mode hist
+
+Graine | Époques | Train    | Test
+     1 |    3000 |   82.5 % |   50.0 %
+     2 |    3000 |   77.5 % |   65.0 %
+     3 |    3000 |   73.8 % |   60.0 %
+     4 |    3000 |   82.5 % |   55.0 %
+     5 |    3000 |   77.5 % |   70.0 %
+     6 |    3000 |   87.5 % |   50.0 %
+     7 |    3000 |   76.3 % |   80.0 %
+     8 |    3000 |   80.0 % |   60.0 %
+     9 |    3000 |   83.8 % |   50.0 %
+    10 |    3000 |   83.8 % |   45.0 %
+
+Train : 80.5 % ± 4.0
+Test  : 58.5 % ± 10.3 (min 45.0, max 80.0)
+```
+
+Selon la graine, le score de test va de 45 % à 80 % pour le même réglage : un seul essai ne permet pas de conclure.
 
 ## claude-02 — Couches et API
 
@@ -242,11 +308,12 @@ La séparation montre ce que l'évaluation sur les images d'entraînement ne pou
 
 ## Notes par étape
 
-Ce que chaque tag `step-NN` contient d'inexact ou de piégeux. Ces tags ne sont pas modifiés ; la mention *corrigé dans `claude-01`* indique où le point a été repris.
+Ce que chaque tag `step-NN` contient d'inexact ou de piégeux. Ces tags ne sont pas modifiés ; la mention *corrigé dans `claude-NN`* indique où le point a été repris.
 
 - **Étapes 3 et 4** : l'erreur de la couche cachée est calculée avec les poids de sortie *déjà mis à jour* (`this.output.backward(...)` est appelé avant leur lecture). L'étape 5 corrige ce point en copiant les poids avant la mise à jour.
 - **Étape 4** : `exec` affiche `ReLU=` pour chaque neurone caché alors que la couche cachée est en tanh ; seul le libellé est faux.
 - **Étapes 6 à 8** : le dossier `tmp/oranges/` doit exister, même vide, quel que soit le jeu de données. Le module `src/datasets/images.js` lit ce dossier dès son chargement, et `src/datasets/index.js` l'importe toujours. *Corrigé dans `claude-01`.*
+- **Étapes 6 à 8** : `exec` redimensionne l'image avec le réglage par défaut de `sharp` (`cover`, qui recadre), alors que le jeu de données l'étire (`fit: "fill"`) ; l'image donnée à `exec` n'est donc pas préparée comme les images d'entraînement. *Corrigé dans `claude-03`.*
 - **Étape 6** : aucun modèle entraîné n'est fourni ; il faut lancer `train` avant `table` et `exec`.
 - **Étape 7** : l'exemple compare les optimiseurs à taux d'apprentissage égal (0,0025, la valeur par défaut). À ce taux et en 2000 époques, la descente de gradient simple n'a pas encore appris XOR ; avec les 10 000 époques par défaut, elle y parvient.
 - **Étape 8** :
