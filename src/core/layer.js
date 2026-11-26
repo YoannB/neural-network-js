@@ -32,8 +32,8 @@ export class Layer {
         return this.outputs;
     }
 
-    backward(errors, iteration = 1) {
-        this.neurons.forEach((n, i) => n.backward(errors[i], iteration));
+    backward(errors, iteration = 1, { errorsAreDeltas = false } = {}) {
+        this.neurons.forEach((n, i) => n.backward(errors[i], iteration, errorsAreDeltas));
     }
 
     getWeightStats() {

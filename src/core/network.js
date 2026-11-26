@@ -95,11 +95,13 @@ export class Network {
     // -------------------------
     computeLoss(yPred, yTrue) {
         if (this.task === "binary-classification") {
+            // Les probabilités sont bornées pour éviter log(0) ; la perte reste >= 0.
             const eps = 1e-7;
-            return -(yTrue * Math.log(yPred + eps) + (1 - yTrue) * Math.log(1 - yPred + eps));
+            const p = Math.min(Math.max(yPred, eps), 1 - eps);
+            return -(yTrue * Math.log(p) + (1 - yTrue) * Math.log(1 - p));
         } else if (this.task === "multiclass-classification") {
             const eps = 1e-9;
-            return -yTrue.reduce((s, v, i) => s + v * Math.log(yPred[i] + eps), 0);
+            return -yTrue.reduce((s, v, i) => s + v * Math.log(Math.max(yPred[i], eps)), 0);
         } else {
             return (yPred - yTrue) ** 2;
         }
@@ -144,6 +146,10 @@ export class Network {
         const h = this.hidden.forward(xNorm);
         const yPred = this.output.forward(h);
 
+        // Gradient de la perte par rapport aux entrées des neurones de sortie (z).
+        // Il vaut p - y pour les trois cas : sigmoïde + entropie croisée binaire,
+        // softmax + entropie croisée, sortie linéaire + erreur quadratique (à un
+        // facteur 2 près, absorbé par le taux d'apprentissage).
         let gradients;
 
         if (this.task === "multiclass-classification") {
@@ -154,7 +160,7 @@ export class Network {
 
         const weights = this.output.neurons.map(n => [...n.weights]);
 
-        this.output.backward(gradients, this.iteration);
+        this.output.backward(gradients, this.iteration, { errorsAreDeltas: true });
 
         const hiddenErrors = this.hidden.neurons.map((_, i) => {
             return gradients.reduce((sum, g, j) => sum + g * weights[j][i], 0);
@@ -181,7 +187,9 @@ export class Network {
                 neuron: i,
                 weight: +n.toFixed(6)
             })),
-            output: +out.yVec[0].toFixed(6)
+            output: this.task === "multiclass-classification"
+                ? out.yVec.map(v => +v.toFixed(6))
+                : +out.yVec[0].toFixed(6)
         };
     }
 

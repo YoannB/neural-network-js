@@ -65,4 +65,5 @@ debug.hidden.forEach(h =>
   console.log(`Neuron ${h.neuron} | a=${h.weight}`)
 );
 
-console.log(`\nOutput: ${debug.output}`);
+const output = Array.isArray(debug.output) ? JSON.stringify(debug.output) : debug.output;
+console.log(`\nOutput: ${output}`);

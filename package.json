@@ -6,7 +6,8 @@
     "reset": "node src/reset.js",
     "train": "node src/train.js",
     "exec": "node src/exec.js",
-    "table": "node src/table.js"
+    "table": "node src/table.js",
+    "test": "node --test"
   },
   "dependencies": {
     "sharp": "^0.34.5"

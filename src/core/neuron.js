@@ -1,13 +1,14 @@
 import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
+import { random } from "./random.js";
 
 export class Neuron {
   constructor(inputSize, activation = "leakyrelu", learningRate = 0.0025, optimizer = "sgd") {
     const scale = Math.sqrt(2 / inputSize);
     this.weights = Array.from(
       { length: inputSize },
-      () => (Math.random() * 2 - 1) * scale
+      () => (random() * 2 - 1) * scale
     );
-    this.bias = Math.random() * 0.5 - 0.25;
+    this.bias = random() * 0.5 - 0.25;
     this.learningRate = Number(learningRate) || 0.0025;
     this.activation = activation;
     this.optimizer = optimizer;
@@ -66,14 +67,21 @@ export class Neuron {
     return this.output;
   }
 
-  backward(error, iteration = 1) {
+  // error : dérivée de la perte par rapport à la sortie du neurone.
+  // Si errorIsDelta est vrai, error est déjà la dérivée par rapport à z
+  // (cas de la couche de sortie : sigmoïde + entropie croisée binaire,
+  // softmax + entropie croisée, sortie linéaire), et la dérivée de
+  // l'activation ne doit pas être appliquée une seconde fois.
+  backward(error, iteration = 1, errorIsDelta = false) {
     if (!Number.isFinite(error)) {
       throw new Error("Erreur reçue NaN dans backward: " + error);
     }
 
     let delta;
 
-    if (this.activation === "leakyrelu") {
+    if (errorIsDelta) {
+      delta = error;
+    } else if (this.activation === "leakyrelu") {
       delta = error * leakyReluDerivative(this.z);
     } else if (this.activation === "tanh") {
       delta = error * tanhDerivative(this.z);

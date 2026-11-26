@@ -1,6 +1,8 @@
 import fs from "fs";
 import { Network } from "./core/network.js";
 import getDataset from "./datasets/index.js";
+import { setSeed } from "./core/random.js";
+import { trainNetwork } from "./core/training.js";
 
 // -------------------------
 // CLI parsing (cohérent avec exec.js)
@@ -11,20 +13,6 @@ const dataset = process.argv[2] || "square";
 let argsStartIndex = 3;
 
 const modelName = dataset;
-
-const datasetObj = getDataset(dataset);
-
-// -------------------------
-console.log(`Dataset    : ${datasetObj.name}`);
-console.log(`Model name : ${modelName}`);
-console.log(`Samples    : ${datasetObj.samples.length}`);
-console.log(`Input size : ${datasetObj.inputSize}`);
-console.log(`Output size: ${datasetObj.outputSize}`);
-console.log(`Task       : ${datasetObj.task}`);
-
-if (Number.isFinite(datasetObj.indexEndTrain)) {
-  console.log(`Index end train: ${datasetObj.indexEndTrain}`);
-}
 
 // -------------------------
 // Hyperparams
@@ -50,20 +38,34 @@ const NEURONS = getArg("neurons", 10);
 const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
+const SEED = getArg("seed", 42);
+const TARGET_LOSS = getArg("target-loss", 0.0001);
 
-console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER });
+const datasetObj = await getDataset(dataset, { seed: SEED });
 
 // -------------------------
-// Dataset split logique
+console.log(`Dataset    : ${datasetObj.name}`);
+console.log(`Model name : ${modelName}`);
+console.log(`Samples    : ${datasetObj.samples.length + (datasetObj.testSamples?.length ?? 0)}`);
+console.log(`Input size : ${datasetObj.inputSize}`);
+console.log(`Output size: ${datasetObj.outputSize}`);
+console.log(`Task       : ${datasetObj.task}`);
+
+console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
+
+setSeed(SEED);
+
+// -------------------------
+// Dataset split : seuls les exemples d'entraînement servent à apprendre
 // -------------------------
 
-const allSamples = datasetObj.samples;
-
-const trainSamples = Number.isFinite(datasetObj.indexEndTrain)
-  ? allSamples.slice(0, datasetObj.indexEndTrain)
-  : allSamples;
+const trainSamples = datasetObj.samples;
+const testCount = datasetObj.testSamples?.length ?? 0;
 
 console.log(`Training samples: ${trainSamples.length}`);
+if (testCount > 0) {
+  console.log(`Test samples    : ${testCount} (non utilisés pour l'entraînement)`);
+}
 
 // -------------------------
 // Preprocessing
@@ -112,27 +114,19 @@ const net = new Network({
 
 console.time("Training");
 
-for (let epoch = 1; epoch <= EPOCHS; epoch++) {
-  let totalLoss = 0;
-
-  for (const { x, y } of trainSamples) {
-    const noisyX = x.map(v => v + (Math.random() - 0.5) * NOISE);
-    const loss = net.train(noisyX, y);
-    totalLoss += loss;
+const result = trainNetwork(net, trainSamples, {
+  epochs: EPOCHS,
+  noise: NOISE,
+  targetLoss: TARGET_LOSS,
+  onEpoch: ({ epoch, loss, last }) => {
+    if (epoch === 1 || epoch % 500 === 0 || last) {
+      console.log(`Epoch ${epoch}/${EPOCHS} - Loss: ${loss.toFixed(6)}`);
+    }
   }
+});
 
-  if (epoch % 500 === 0 || epoch === 1) {
-    console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
-    );
-  }
-
-  if (totalLoss < 0) {
-    console.log(
-      `Epoch ${epoch}/${EPOCHS} - Loss: ${(totalLoss / trainSamples.length).toFixed(6)}`
-    );
-    break;
-  }
+if (result.reachedTarget) {
+  console.log(`Perte cible ${TARGET_LOSS} atteinte à l'époque ${result.epochs}`);
 }
 
 console.timeEnd("Training");
@@ -142,6 +136,7 @@ console.timeEnd("Training");
 // -------------------------
 
 const model = net.toJSON();
+model.config.seed = SEED;
 
 fs.mkdirSync("./models", { recursive: true });
 fs.writeFileSync(`./models/${modelName}.json`, JSON.stringify(model, null, 2));

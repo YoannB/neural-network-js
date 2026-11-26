@@ -18,19 +18,14 @@ const rawModel = JSON.parse(
 const net = Network.load(rawModel);
 
 // -------------------------
-const dataset = getDataset(datasetName);
+// Même graine qu'à l'entraînement : on retrouve la même séparation train/test.
+const dataset = await getDataset(datasetName, { seed: rawModel.config.seed });
 const samples = dataset.samples;
 const task = dataset.task ?? "regression";
 
-const hasSplit = Number.isFinite(dataset.indexEndTrain);
-
-const trainSamples = hasSplit
-    ? samples.slice(0, dataset.indexEndTrain)
-    : samples;
-
-const testSamples = hasSplit
-    ? samples.slice(dataset.indexEndTrain)
-    : samples;
+const trainSamples = samples;
+const testSamples = dataset.testSamples ?? [];
+const hasSplit = testSamples.length > 0;
 
 // -------------------------
 function evaluate(samples, title) {
@@ -68,8 +63,7 @@ function evaluate(samples, title) {
 
         if (task === "multiclass-classification") {
             const yTrueVec = y;
-            const out = net.forward(x);
-            const yPredVec = out?.yNorm ?? net.output?.outputs ?? [];
+            const yPredVec = net.predict(x);
 
             const trueClass = yTrueVec.indexOf(Math.max(...yTrueVec));
             const predClass = yPredVec.indexOf(Math.max(...yPredVec));

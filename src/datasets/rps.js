@@ -1,4 +1,5 @@
 // datasets/rps.js
+import { splitSamples } from "./split.js";
 
 const ROCK = [1, 0, 0];
 const PAPER = [0, 1, 0];
@@ -29,22 +30,13 @@ function buildSamples(repeat = 200) {
     return samples;
 }
 
-const all = buildSamples(200);
-
-// Shuffle simple
-for (let i = all.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [all[i], all[j]] = [all[j], all[i]];
+// 80 % des exemples pour l'entraînement, 20 % pour le test.
+export default function rps({ seed } = {}) {
+    return {
+        name: "rps",
+        inputSize: 3,
+        outputSize: 3,
+        task: "multiclass-classification",
+        ...splitSamples(buildSamples(200), { testRatio: 0.2, seed })
+    };
 }
-
-const split = Math.floor(all.length * 0.8);
-
-export default {
-    name: "rps",
-    inputSize: 3,
-    outputSize: 3,
-    task: "multiclass-classification",
-
-    samples: all.slice(0, split),
-    testSamples: all.slice(split)
-};
