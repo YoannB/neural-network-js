@@ -21,7 +21,8 @@ export class Network {
         preprocessing = null,
         task = "regression",
         optimizer = "sgd",
-        outputSize = 1
+        outputSize = 1,
+        l2 = 0
     } = {}) {
         if (!OUTPUT_ACTIVATIONS[task]) {
             throw new Error(`Tâche inconnue: ${task}`);
@@ -43,16 +44,17 @@ export class Network {
         this.preprocessing = preprocessing;
         this.task = task;
         this.optimizer = optimizer;
+        this.l2 = l2;
         this.iteration = 0;
 
         // Couches cachées puis couche de sortie : chacune reçoit la sortie de la précédente.
         this.layers = [];
         let previousSize = inputSize;
         for (const size of sizes) {
-            this.layers.push(new Layer(previousSize, size, activation, learningRate, optimizer));
+            this.layers.push(new Layer(previousSize, size, activation, learningRate, optimizer, l2));
             previousSize = size;
         }
-        this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer));
+        this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer, l2));
     }
 
     get output() {
@@ -238,6 +240,7 @@ export class Network {
                 learningRate: this.learningRate,
                 preprocessing: this.preprocessing,
                 optimizer: this.optimizer,
+                l2: this.l2,
                 iteration: this.iteration,
                 outputSize: this.outputSize
             },

@@ -2,12 +2,12 @@ import { softmax } from "./activations.js";
 import { Neuron } from "./neuron.js";
 
 export class Layer {
-    constructor(inputSize, count, activation, learningRate, optimizer) {
+    constructor(inputSize, count, activation, learningRate, optimizer, l2 = 0) {
         this.activation = activation;
 
         this.neurons = Array.from(
             { length: count },
-            () => new Neuron(inputSize, activation, learningRate, optimizer)
+            () => new Neuron(inputSize, activation, learningRate, optimizer, l2)
         );
     }
 

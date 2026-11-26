@@ -25,6 +25,11 @@ export function parseTrainingOptions(args) {
         optimizer: getArg(args, "optimizer", "adam"),
         seed: getArg(args, "seed", 42),
         targetLoss: getArg(args, "target-loss", 0.0001),
+        l2: getArg(args, "l2", 0),
+        // --validation 0.2 : 20 % des exemples d'entraînement servent à décider quand s'arrêter.
+        validation: getArg(args, "validation", 0),
+        patience: getArg(args, "patience", 500),
+        augment: getArg(args, "augment", "none"),
         datasetOptions: parseDatasetOptions(args)
     };
 }

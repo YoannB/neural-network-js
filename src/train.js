@@ -9,18 +9,19 @@ const modelName = datasetName;
 const options = parseTrainingOptions(process.argv.slice(3));
 
 const { result, model } = await runExperiment(datasetName, options, {
-  onStart: ({ dataset }) => {
-    printHeader(dataset);
+  onStart: ({ dataset, fitSamples, validationSamples }) => {
+    printHeader(dataset, fitSamples, validationSamples);
     console.time("Training");
   },
-  onEpoch: ({ epoch, loss, last }) => {
+  onEpoch: ({ epoch, loss, validationLoss, last }) => {
     if (epoch === 1 || epoch % 500 === 0 || last) {
-      console.log(`Epoch ${epoch}/${options.epochs} - Loss: ${loss.toFixed(6)}`);
+      const val = validationLoss !== undefined ? ` - Validation: ${validationLoss.toFixed(6)}` : "";
+      console.log(`Epoch ${epoch}/${options.epochs} - Loss: ${loss.toFixed(6)}${val}`);
     }
   }
 });
 
-function printHeader(ds) {
+function printHeader(ds, fitSamples, validationSamples) {
   console.log(`Dataset    : ${ds.name}`);
   console.log(`Model name : ${modelName}`);
   console.log(`Samples    : ${ds.samples.length + (ds.testSamples?.length ?? 0)}`);
@@ -28,18 +29,28 @@ function printHeader(ds) {
   console.log(`Output size: ${ds.outputSize}`);
   console.log(`Task       : ${ds.task}`);
 
-  const { epochs, layers, activation, lr, noise, optimizer, seed, targetLoss, datasetOptions } = options;
+  const { epochs, layers, activation, lr, noise, optimizer, seed, targetLoss, l2, validation, patience, augment, datasetOptions } = options;
   console.log("Training config:", {
     EPOCHS: epochs, LAYERS: layers, ACTIVATION: activation, LR: lr, NOISE: noise,
     OPTIMIZER: optimizer, SEED: seed, TARGET_LOSS: targetLoss,
+    ...(l2 > 0 ? { L2: l2 } : {}),
+    ...(validation > 0 ? { VALIDATION: validation, PATIENCE: patience } : {}),
+    ...(augment !== "none" ? { AUGMENT: augment } : {}),
     ...(Object.keys(datasetOptions).length > 0 ? { DATASET: datasetOptions } : {})
   });
 
-  console.log(`Training samples: ${ds.samples.length}`);
+  console.log(`Training samples: ${fitSamples.length}`);
+  if (validationSamples.length > 0) {
+    console.log(`Validation samples: ${validationSamples.length} (pour décider quand s'arrêter)`);
+  }
   const testCount = ds.testSamples?.length ?? 0;
   if (testCount > 0) {
     console.log(`Test samples    : ${testCount} (non utilisés pour l'entraînement)`);
   }
+}
+
+if (result.stoppedOnValidation || result.bestEpoch !== undefined) {
+  console.log(`Meilleure perte de validation ${result.validationLoss.toFixed(6)} à l'époque ${result.bestEpoch} : poids de cette époque conservés`);
 }
 
 if (result.reachedTarget) {
