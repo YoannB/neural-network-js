@@ -74,25 +74,19 @@ if (testCount > 0) {
 // Preprocessing
 // -------------------------
 
+// Les entrées sont divisées par leur plus grande valeur absolue (sur les
+// exemples d'entraînement). Les sorties ne sont pas normalisées.
 function computePreprocessing(samples) {
   let maxX = 0;
-  let maxY = 0;
 
   for (const s of samples) {
     for (const v of s.x) {
       const a = Math.abs(v);
       if (a > maxX) maxX = a;
     }
-    for (const v of s.y) {
-      const a = Math.abs(v);
-      if (a > maxY) maxY = a;
-    }
   }
 
-  return {
-    xScale: maxX || 1,
-    yScale: maxY || 1
-  };
+  return { xScale: maxX || 1 };
 }
 
 const preprocessing = computePreprocessing(trainSamples);

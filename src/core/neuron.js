@@ -23,9 +23,6 @@ export class Neuron {
     this.beta1 = 0.9;
     this.beta2 = 0.999;
     this.epsilon = 1e-8;
-
-    // Pour la rétropropagation
-    this.lastError = 0;
   }
 
   forward(inputs) {

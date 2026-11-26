@@ -37,18 +37,4 @@ export class Layer {
     backward(errors, iteration = 1, { errorsAreDeltas = false } = {}) {
         return this.neurons.map((n, i) => n.backward(errors[i], iteration, errorsAreDeltas));
     }
-
-    getWeightStats() {
-        const allWeights = this.neurons.flatMap(n => n.weights);
-        const mean = allWeights.reduce((s, w) => s + w, 0) / allWeights.length;
-        const variance = allWeights.reduce((s, w) => s + (w - mean) ** 2, 0) / allWeights.length;
-
-        return {
-            count: allWeights.length,
-            mean: mean,
-            std: Math.sqrt(variance),
-            min: Math.min(...allWeights),
-            max: Math.max(...allWeights)
-        };
-    }
 }
