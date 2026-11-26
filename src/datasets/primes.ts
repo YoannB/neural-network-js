@@ -1,4 +1,6 @@
-function isPrime(n) {
+import type { Dataset, Sample } from "../core/types.js";
+
+function isPrime(n: number): boolean {
     if (n < 2) return false;
     for (let i = 2; i <= Math.sqrt(n); i++) {
         if (n % i === 0) return false;
@@ -6,7 +8,7 @@ function isPrime(n) {
     return true;
 }
 
-function toBinaryVector(n, bits = 5) {
+function toBinaryVector(n: number, bits = 5): number[] {
     return n
         .toString(2)
         .padStart(bits, "0")
@@ -14,7 +16,7 @@ function toBinaryVector(n, bits = 5) {
         .map(b => Number(b));
 }
 
-const samples = [];
+const samples: Sample[] = [];
 
 for (let i = 0; i <= 13; i++) {
     samples.push({
@@ -29,4 +31,4 @@ export default {
     outputSize: 1,
     task: "binary-classification",
     samples
-};
+} satisfies Dataset;

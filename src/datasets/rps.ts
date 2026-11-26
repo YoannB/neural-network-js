@@ -1,5 +1,7 @@
-// datasets/rps.js
+// Pierre-feuille-ciseaux : pour chaque coup, le réseau doit donner le coup qui le bat.
 import { splitSamples } from "./split.js";
+import type { DatasetOptions } from "./index.js";
+import type { Dataset, Sample } from "../core/types.js";
 
 const ROCK = [1, 0, 0];
 const PAPER = [0, 1, 0];
@@ -14,8 +16,8 @@ const RULES = [
 ];
 
 // On duplique les données pour faciliter l'entraînement
-function buildSamples(repeat = 200) {
-    const samples = [];
+function buildSamples(repeat = 200): Sample[] {
+    const samples: Sample[] = [];
 
     for (let i = 0; i < repeat; i++) {
         for (const r of RULES) {
@@ -31,7 +33,7 @@ function buildSamples(repeat = 200) {
 }
 
 // 80 % des exemples pour l'entraînement, 20 % pour le test.
-export default function rps({ seed } = {}) {
+export default function rps({ seed }: DatasetOptions = {}): Dataset {
     return {
         name: "rps",
         inputSize: 3,

@@ -1,8 +1,9 @@
 import fs from "fs";
 import { parseTrainingOptions } from "./cli.js";
 import { runExperiment } from "./core/experiment.js";
+import type { Dataset, Sample } from "./core/types.js";
 
-// node src/train.js <dataset> [options] : entraîne et sauvegarde models/<dataset>.json
+// node dist/src/train.js <dataset> [options] : entraîne et sauvegarde models/<dataset>.json
 
 const datasetName = process.argv[2] || "square";
 const modelName = datasetName;
@@ -21,7 +22,7 @@ const { result, model } = await runExperiment(datasetName, options, {
   }
 });
 
-function printHeader(ds, fitSamples, validationSamples) {
+function printHeader(ds: Dataset, fitSamples: Sample[], validationSamples: Sample[]): void {
   console.log(`Dataset    : ${ds.name}`);
   console.log(`Model name : ${modelName}`);
   console.log(`Samples    : ${ds.samples.length + (ds.testSamples?.length ?? 0)}`);
@@ -33,8 +34,8 @@ function printHeader(ds, fitSamples, validationSamples) {
   console.log("Training config:", {
     EPOCHS: epochs, LAYERS: layers, ACTIVATION: activation, LR: lr, NOISE: noise,
     OPTIMIZER: optimizer, SEED: seed, TARGET_LOSS: targetLoss,
-    ...(l2 > 0 ? { L2: l2 } : {}),
-    ...(validation > 0 ? { VALIDATION: validation, PATIENCE: patience } : {}),
+    ...((l2 ?? 0) > 0 ? { L2: l2 } : {}),
+    ...((validation ?? 0) > 0 ? { VALIDATION: validation, PATIENCE: patience } : {}),
     ...(augment !== "none" ? { AUGMENT: augment } : {}),
     ...(Object.keys(datasetOptions).length > 0 ? { DATASET: datasetOptions } : {})
   });
@@ -49,7 +50,7 @@ function printHeader(ds, fitSamples, validationSamples) {
   }
 }
 
-if (result.stoppedOnValidation || result.bestEpoch !== undefined) {
+if (result.validationLoss !== undefined) {
   console.log(`Meilleure perte de validation ${result.validationLoss.toFixed(6)} à l'époque ${result.bestEpoch} : poids de cette époque conservés`);
 }
 

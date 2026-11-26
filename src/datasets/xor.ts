@@ -1,3 +1,5 @@
+import type { Dataset } from "../core/types.js";
+
 export default {
     name: "xor",
     inputSize: 2,
@@ -10,4 +12,4 @@ export default {
         { x: [1, 0], y: [1] },
         { x: [1, 1], y: [0] }
     ]
-};
+} satisfies Dataset;

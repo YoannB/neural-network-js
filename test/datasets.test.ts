@@ -27,7 +27,7 @@ test("rps : 80 % entraînement, 20 % test, séparation reproductible", async () 
     const c = await getDataset("rps", { seed: 6 });
 
     assert.equal(a.samples.length, 480);
-    assert.equal(a.testSamples.length, 120);
+    assert.equal(a.testSamples?.length, 120);
     assert.deepEqual(a.testSamples, b.testSamples);
     assert.notDeepEqual(a.testSamples, c.testSamples);
 });

@@ -1,17 +1,51 @@
 import { Layer } from "./layer.js";
+import type { HiddenActivation, ModelJSON, Optimizer, OutputActivation, Preprocessing, SavedLayer, Task } from "./types.js";
 
 // Activation de la couche de sortie selon la tâche.
-const OUTPUT_ACTIVATIONS = {
+const OUTPUT_ACTIVATIONS: Record<Task, OutputActivation> = {
     "regression": "linear",
     "binary-classification": "sigmoid",
     "multiclass-classification": "softmax"
 };
 
-export const HIDDEN_ACTIVATIONS = ["tanh", "relu", "leakyrelu", "sigmoid"];
+export const HIDDEN_ACTIVATIONS: readonly HiddenActivation[] = ["tanh", "relu", "leakyrelu", "sigmoid"];
+
+export interface NetworkOptions {
+    inputSize?: number;
+    /** Nombre de neurones de chaque couche cachée, par exemple [16, 8]. */
+    hiddenLayers?: number[] | null;
+    /** Une seule couche cachée (utilisé si hiddenLayers est absent). */
+    hiddenNeurons?: number;
+    activation?: HiddenActivation;
+    learningRate?: number;
+    preprocessing?: Preprocessing | null;
+    task?: Task;
+    optimizer?: Optimizer;
+    outputSize?: number;
+    l2?: number;
+}
+
+export interface ForwardResult {
+    x: number[];
+    xNorm: number[];
+    /** Sortie de chaque couche cachée. */
+    hidden: number[][];
+    yVec: number[];
+}
 
 export class Network {
-    // hiddenLayers : nombre de neurones de chaque couche cachée, par exemple [16, 8].
-    // hiddenNeurons reste accepté pour une seule couche cachée.
+    readonly inputSize: number;
+    readonly outputSize: number;
+    readonly hiddenLayers: number[];
+    readonly activation: HiddenActivation;
+    readonly learningRate: number;
+    readonly preprocessing: Preprocessing | null;
+    readonly task: Task;
+    readonly optimizer: Optimizer;
+    readonly l2: number;
+    readonly layers: Layer[];
+    iteration = 0;
+
     constructor({
         inputSize = 1,
         hiddenLayers = null,
@@ -23,8 +57,8 @@ export class Network {
         optimizer = "sgd",
         outputSize = 1,
         l2 = 0
-    } = {}) {
-        if (!OUTPUT_ACTIVATIONS[task]) {
+    }: NetworkOptions = {}) {
+        if (!(task in OUTPUT_ACTIVATIONS)) {
             throw new Error(`Tâche inconnue: ${task}`);
         }
         if (!HIDDEN_ACTIVATIONS.includes(activation)) {
@@ -45,7 +79,6 @@ export class Network {
         this.task = task;
         this.optimizer = optimizer;
         this.l2 = l2;
-        this.iteration = 0;
 
         // Couches cachées puis couche de sortie : chacune reçoit la sortie de la précédente.
         this.layers = [];
@@ -57,25 +90,33 @@ export class Network {
         this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer, l2));
     }
 
-    get output() {
+    get output(): Layer {
         return this.layers[this.layers.length - 1];
     }
 
     // -------------------------
     // Chargement depuis modèle
     // -------------------------
-    static load(data) {
+    static load(data: ModelJSON): Network {
+        const { hiddenLayers, hiddenNeurons, activation, learningRate, preprocessing, l2, inputSize } = data.config;
         const net = new Network({
-            ...data.config,
+            inputSize,
+            hiddenLayers: hiddenLayers ?? null,
+            ...(hiddenNeurons !== undefined ? { hiddenNeurons } : {}),
+            ...(activation !== undefined ? { activation } : {}),
+            learningRate,
+            preprocessing,
+            l2: l2 ?? 0,
             task: data.meta?.task ?? "regression",
             optimizer: data.config.optimizer || "sgd",
             outputSize: data.meta?.outputSize ?? 1
         });
 
         // Les modèles des étapes 5 à 8 ont deux couches nommées hidden et output.
-        const savedLayers = data.layers ?? [data.hidden, data.output];
-        if (savedLayers.length !== net.layers.length) {
-            throw new Error(`Modèle incohérent: ${savedLayers.length} couches enregistrées, ${net.layers.length} attendues`);
+        const savedLayers: SavedLayer[] | undefined = data.layers
+            ?? (data.hidden && data.output ? [data.hidden, data.output] : undefined);
+        if (!savedLayers || savedLayers.length !== net.layers.length) {
+            throw new Error(`Modèle incohérent: ${savedLayers?.length ?? 0} couches enregistrées, ${net.layers.length} attendues`);
         }
 
         savedLayers.forEach((savedLayer, l) => {
@@ -99,55 +140,57 @@ export class Network {
     // -------------------------
     // Utils
     // -------------------------
-    ensureVector(input) {
+    ensureVector(input: number[]): number[] {
         if (!Array.isArray(input)) {
             throw new Error("Network attend un tableau en entrée");
         }
-
         if (Array.isArray(input[0])) {
             throw new Error("Entrée invalide (tableau imbriqué)");
         }
-
         if (input.length !== this.inputSize) {
-            throw new Error(
-                `Dimension incorrecte: reçu ${input.length}, attendu ${this.inputSize}`
-            );
+            throw new Error(`Dimension incorrecte: reçu ${input.length}, attendu ${this.inputSize}`);
         }
-
         return input;
     }
 
-    normalizeX(xVec) {
-        if (!this.preprocessing) return xVec;
-        return xVec.map(x => x / this.preprocessing.xScale);
+    normalizeX(xVec: number[]): number[] {
+        const preprocessing = this.preprocessing;
+        if (!preprocessing) return xVec;
+        return xVec.map(x => x / preprocessing.xScale);
     }
 
     // -------------------------
     // Loss
     // -------------------------
-    computeLoss(yPred, yTrue) {
+    computeLoss(yPred: number | number[], yTrue: number | number[]): number {
+        if (this.task === "multiclass-classification") {
+            const eps = 1e-9;
+            const p = yPred as number[];
+            return -(yTrue as number[]).reduce((s, v, i) => s + v * Math.log(Math.max(p[i], eps)), 0);
+        }
+
+        const pred = yPred as number;
+        const truth = yTrue as number;
+
         if (this.task === "binary-classification") {
             // Les probabilités sont bornées pour éviter log(0) ; la perte reste >= 0.
             const eps = 1e-7;
-            const p = Math.min(Math.max(yPred, eps), 1 - eps);
-            return -(yTrue * Math.log(p) + (1 - yTrue) * Math.log(1 - p));
-        } else if (this.task === "multiclass-classification") {
-            const eps = 1e-9;
-            return -yTrue.reduce((s, v, i) => s + v * Math.log(Math.max(yPred[i], eps)), 0);
-        } else {
-            return (yPred - yTrue) ** 2;
+            const p = Math.min(Math.max(pred, eps), 1 - eps);
+            return -(truth * Math.log(p) + (1 - truth) * Math.log(1 - p));
         }
+
+        return (pred - truth) ** 2;
     }
 
     // -------------------------
     // Inference
     // -------------------------
-    // Renvoie l'entrée, l'entrée normalisée et la sortie de chaque couche.
-    forward(input) {
+    /** Renvoie l'entrée, l'entrée normalisée et la sortie de chaque couche. */
+    forward(input: number[]): ForwardResult {
         const x = this.ensureVector(input);
         const xNorm = this.normalizeX(x);
 
-        const activations = [];
+        const activations: number[][] = [];
         let current = xNorm;
         for (const layer of this.layers) {
             current = layer.forward(current);
@@ -157,20 +200,33 @@ export class Network {
         return { x, xNorm, hidden: activations.slice(0, -1), yVec: current };
     }
 
-    predict(input) {
+    /**
+     * Prédiction : un nombre en régression et en classification binaire
+     * (probabilité de la classe 1), un vecteur de probabilités en multiclasse.
+     */
+    predict(input: number[]): number | number[] {
         const out = this.forward(input).yVec;
+        return this.task === "multiclass-classification" ? out : out[0];
+    }
 
+    /** Sortie numérique : valeur en régression, probabilité de la classe 1 en binaire. */
+    predictValue(input: number[]): number {
         if (this.task === "multiclass-classification") {
-            return out;
+            throw new Error("predictValue : utiliser predictProbabilities en classification multiclasse");
         }
+        return this.forward(input).yVec[0];
+    }
 
-        return out[0];
+    /** Probabilité de chaque classe (classification multiclasse). */
+    predictProbabilities(input: number[]): number[] {
+        return this.forward(input).yVec;
     }
 
     // -------------------------
     // Training
     // -------------------------
-    train(input, yTrueVec) {
+    /** Un pas d'apprentissage sur un exemple ; renvoie la perte avant la mise à jour. */
+    train(input: number[], yTrueVec: number[]): number {
         this.iteration++;
 
         const { yVec: yPred } = this.forward(input);
@@ -200,18 +256,16 @@ export class Network {
             }
         }
 
-        return this.computeLoss(
-            this.task === "multiclass-classification" ? yPred : yPred[0],
-            this.task === "multiclass-classification" ? yTrueVec : yTrueVec[0]
-        );
+        const multiclass = this.task === "multiclass-classification";
+        return this.computeLoss(multiclass ? yPred : yPred[0], multiclass ? yTrueVec : yTrueVec[0]);
     }
 
     // -------------------------
     // Debug
     // -------------------------
-    debugPredict(input) {
+    debugPredict(input: number[]) {
         const out = this.forward(input);
-        const round = v => +v.toFixed(6);
+        const round = (v: number) => +v.toFixed(6);
 
         return {
             input: out.x,
@@ -226,7 +280,7 @@ export class Network {
     // -------------------------
     // Save
     // -------------------------
-    toJSON() {
+    toJSON(): ModelJSON {
         return {
             meta: {
                 inputSize: this.inputSize,

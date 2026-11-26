@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sigmoid, sigmoidDerivative, tanhDerivative, softmax } from "../src/core/activations.js";
 
-const numericalDerivative = (f, x, h = 1e-6) => (f(x + h) - f(x - h)) / (2 * h);
+const numericalDerivative = (f: (x: number) => number, x: number, h = 1e-6) => (f(x + h) - f(x - h)) / (2 * h);
 
 test("dérivées de la sigmoïde et de tanh", () => {
     for (const x of [-3, -0.5, 0, 0.7, 2.5]) {

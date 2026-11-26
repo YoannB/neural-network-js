@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Network } from "../src/core/network.js";
 import { setSeed } from "../src/core/random.js";
+import type { HiddenActivation, ModelJSON, Task } from "../src/core/types.js";
 
 test("couches cachées configurables", () => {
     const net = new Network({ inputSize: 3, hiddenLayers: [16, 8], outputSize: 2, task: "multiclass-classification" });
@@ -19,15 +20,15 @@ test("hiddenNeurons reste accepté pour une seule couche cachée", () => {
 test("configurations invalides refusées", () => {
     assert.throws(() => new Network({ hiddenLayers: [] }), /Couches cachées invalides/);
     assert.throws(() => new Network({ hiddenLayers: [4, 0] }), /Couches cachées invalides/);
-    assert.throws(() => new Network({ activation: "inconnue" }), /Activation inconnue/);
-    assert.throws(() => new Network({ task: "inconnue" }), /Tâche inconnue/);
+    assert.throws(() => new Network({ activation: "inconnue" as HiddenActivation }), /Activation inconnue/);
+    assert.throws(() => new Network({ task: "inconnue" as Task }), /Tâche inconnue/);
 });
 
 test("un modèle à l'ancien format (hidden / output) se charge encore", () => {
     setSeed(2);
     const net = new Network({ inputSize: 2, hiddenNeurons: 3, task: "binary-classification" });
-    const { layers, ...saved } = net.toJSON();
-    const legacy = {
+    const { layers = [], ...saved } = net.toJSON();
+    const legacy: ModelJSON = {
         ...saved,
         config: { ...saved.config, hiddenLayers: undefined, hiddenNeurons: 3 },
         hidden: layers[0],
