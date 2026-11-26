@@ -1,13 +1,14 @@
 import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
+import { random } from "./random.js";
 
 export class Neuron {
   constructor(inputSize, activation = "leakyrelu", learningRate = 0.0025, optimizer = "sgd") {
     const scale = Math.sqrt(2 / inputSize);
     this.weights = Array.from(
       { length: inputSize },
-      () => (Math.random() * 2 - 1) * scale
+      () => (random() * 2 - 1) * scale
     );
-    this.bias = Math.random() * 0.5 - 0.25;
+    this.bias = random() * 0.5 - 0.25;
     this.learningRate = Number(learningRate) || 0.0025;
     this.activation = activation;
     this.optimizer = optimizer;

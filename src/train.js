@@ -1,6 +1,7 @@
 import fs from "fs";
 import { Network } from "./core/network.js";
 import getDataset from "./datasets/index.js";
+import { random, setSeed } from "./core/random.js";
 
 // -------------------------
 // CLI parsing (cohérent avec exec.js)
@@ -50,8 +51,11 @@ const NEURONS = getArg("neurons", 10);
 const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
+const SEED = getArg("seed", 42);
 
-console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER });
+console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED });
+
+setSeed(SEED);
 
 // -------------------------
 // Dataset split logique
@@ -116,7 +120,7 @@ for (let epoch = 1; epoch <= EPOCHS; epoch++) {
   let totalLoss = 0;
 
   for (const { x, y } of trainSamples) {
-    const noisyX = x.map(v => v + (Math.random() - 0.5) * NOISE);
+    const noisyX = x.map(v => v + (random() - 0.5) * NOISE);
     const loss = net.train(noisyX, y);
     totalLoss += loss;
   }
@@ -142,6 +146,7 @@ console.timeEnd("Training");
 // -------------------------
 
 const model = net.toJSON();
+model.config.seed = SEED;
 
 fs.mkdirSync("./models", { recursive: true });
 fs.writeFileSync(`./models/${modelName}.json`, JSON.stringify(model, null, 2));
