@@ -63,8 +63,7 @@ function evaluate(samples, title) {
 
         if (task === "multiclass-classification") {
             const yTrueVec = y;
-            const out = net.forward(x);
-            const yPredVec = out?.yNorm ?? net.output?.outputs ?? [];
+            const yPredVec = net.predict(x);
 
             const trueClass = yTrueVec.indexOf(Math.max(...yTrueVec));
             const predClass = yPredVec.indexOf(Math.max(...yPredVec));

@@ -187,7 +187,9 @@ export class Network {
                 neuron: i,
                 weight: +n.toFixed(6)
             })),
-            output: +out.yVec[0].toFixed(6)
+            output: this.task === "multiclass-classification"
+                ? out.yVec.map(v => +v.toFixed(6))
+                : +out.yVec[0].toFixed(6)
         };
     }
 
