@@ -1,9 +1,17 @@
 import fs from "fs/promises";
+import { existsSync, readdirSync } from "fs";
 import path from "path";
+
+// La clé peut venir de .env.local ou .env (Node 20.12 ou plus), ou du terminal.
+for (const file of [".env.local", ".env"]) {
+    if (existsSync(file) && typeof process.loadEnvFile === "function") {
+        process.loadEnvFile(file);
+    }
+}
 
 const API_KEY = process.env.PIXABAY_API_KEY;
 if (!API_KEY) {
-    console.error("Définis PIXABAY_API_KEY dans les variables d'environnement");
+    console.error("Définis PIXABAY_API_KEY dans .env.local ou dans les variables d'environnement");
     process.exit(1);
 }
 
@@ -29,13 +37,24 @@ async function main() {
     const data = await res.json();
     const images = data.hits.slice(0, PER_PAGE);
 
+    // Une image déjà présente (triée ou non) n'est pas téléchargée de nouveau.
+    const existing = new Set(
+        readdirSync(DIR).map(f => f.match(/^orange_(\d+)[_.]/)?.[1]).filter(Boolean)
+    );
+
     console.log(`Téléchargement de ${images.length} images...`);
 
     // Téléchargement séquentiel
     for (let i = 0; i < images.length; i++) {
         const img = images[i];
         const imgUrl = img.largeImageURL || img.webformatURL;
-        const filepath = path.join(DIR, `orange_${i + 1}.jpg`);
+        if (existing.has(String(i + 1))) {
+            console.log(`= orange_${i + 1} déjà présente`);
+            continue;
+        }
+
+        // Nommée _ko par défaut : renommer en _ok les images qui montrent une orange.
+        const filepath = path.join(DIR, `orange_${i + 1}_ko.jpg`);
 
         try {
             const imgRes = await fetch(imgUrl);
@@ -48,7 +67,7 @@ async function main() {
         }
     }
 
-    console.log("Terminé.");
+    console.log("Terminé. Renomme en orange_N_ok.jpg les images qui montrent une orange.");
 }
 
 main().catch(err => console.error(err));
