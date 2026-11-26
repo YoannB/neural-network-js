@@ -25,6 +25,17 @@ export function parseTrainingOptions(args) {
         optimizer: getArg(args, "optimizer", "adam"),
         seed: getArg(args, "seed", 42),
         targetLoss: getArg(args, "target-loss", 0.0001),
-        datasetOptions: {}
+        datasetOptions: parseDatasetOptions(args)
     };
+}
+
+// Options du jeu images (--image-size, --image-mode) : seules celles qui sont
+// données sont transmises, les autres jeux de données les ignorent.
+function parseDatasetOptions(args) {
+    const options = {};
+    const size = getArg(args, "image-size", undefined);
+    const mode = getArg(args, "image-mode", undefined);
+    if (size !== undefined) options.size = size;
+    if (mode !== undefined) options.mode = mode;
+    return options;
 }
