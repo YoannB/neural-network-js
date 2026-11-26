@@ -144,6 +144,10 @@ export class Network {
         const h = this.hidden.forward(xNorm);
         const yPred = this.output.forward(h);
 
+        // Gradient de la perte par rapport aux entrées des neurones de sortie (z).
+        // Il vaut p - y pour les trois cas : sigmoïde + entropie croisée binaire,
+        // softmax + entropie croisée, sortie linéaire + erreur quadratique (à un
+        // facteur 2 près, absorbé par le taux d'apprentissage).
         let gradients;
 
         if (this.task === "multiclass-classification") {
@@ -154,7 +158,7 @@ export class Network {
 
         const weights = this.output.neurons.map(n => [...n.weights]);
 
-        this.output.backward(gradients, this.iteration);
+        this.output.backward(gradients, this.iteration, { errorsAreDeltas: true });
 
         const hiddenErrors = this.hidden.neurons.map((_, i) => {
             return gradients.reduce((sum, g, j) => sum + g * weights[j][i], 0);
