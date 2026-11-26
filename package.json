@@ -1,12 +1,33 @@
 {
   "name": "neural-network-js",
   "version": "1.0.0",
+  "description": "Réseau de neurones écrit à la main en TypeScript, sans dépendance : couches denses, SGD / Adam / RMSprop, régression et classification",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YoannB/neural-network-js.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
   },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src/index.*",
+    "dist/src/core/",
+    "dist/src/datasets/split.*"
+  ],
+  "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "prepare": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
     "pretrain": "tsc",
     "train": "node dist/src/train.js",
     "pretable": "tsc",
@@ -15,6 +36,10 @@
     "exec": "node dist/src/exec.js",
     "preevaluate": "tsc",
     "evaluate": "node dist/src/evaluate.js",
+    "preexample:xor": "tsc",
+    "example:xor": "node dist/examples/xor.js",
+    "preexample:sine": "tsc",
+    "example:sine": "node dist/examples/sine.js",
     "prereset": "tsc",
     "reset": "node dist/src/reset.js",
     "predownload-images": "tsc",
@@ -22,11 +47,9 @@
     "pretest": "tsc",
     "test": "node --test \"dist/test/*.test.js\""
   },
-  "dependencies": {
-    "sharp": "^0.34.5"
-  },
   "devDependencies": {
     "@types/node": "^22.20.7",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "sharp": "^0.34.5"
   }
 }

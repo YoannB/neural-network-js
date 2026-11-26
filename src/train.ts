@@ -1,6 +1,6 @@
 import fs from "fs";
 import { parseTrainingOptions } from "./cli.js";
-import { runExperiment } from "./core/experiment.js";
+import { runExperiment } from "./experiment.js";
 import type { Dataset, Sample } from "./core/types.js";
 
 // node dist/src/train.js <dataset> [options] : entraîne et sauvegarde models/<dataset>.json

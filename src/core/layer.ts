@@ -1,5 +1,6 @@
 import { softmax } from "./activations.js";
 import { Neuron } from "./neuron.js";
+import { random, type RandomFn } from "./random.js";
 import type { Activation, Optimizer } from "./types.js";
 
 export class Layer {
@@ -7,11 +8,11 @@ export class Layer {
     readonly neurons: Neuron[];
     outputs: number[] = [];
 
-    constructor(inputSize: number, count: number, activation: Activation, learningRate: number, optimizer: Optimizer, l2 = 0) {
+    constructor(inputSize: number, count: number, activation: Activation, learningRate: number, optimizer: Optimizer, l2 = 0, rand: RandomFn = random) {
         this.activation = activation;
         this.neurons = Array.from(
             { length: count },
-            () => new Neuron(inputSize, activation, learningRate, optimizer, l2)
+            () => new Neuron(inputSize, activation, learningRate, optimizer, l2, rand)
         );
     }
 

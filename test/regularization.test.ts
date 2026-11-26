@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { Network } from "../src/core/network.js";
 import { setSeed } from "../src/core/random.js";
 import { trainNetwork, meanLoss } from "../src/core/training.js";
-import { runExperiment } from "../src/core/experiment.js";
+import { runExperiment } from "../src/experiment.js";
 import getDataset from "../src/datasets/index.js";
-import type { ExperimentOptions } from "../src/core/experiment.js";
+import type { ExperimentOptions } from "../src/experiment.js";
 
 const sumOfSquares = (net: Network) => net.layers.flatMap(l => l.neurons.flatMap(n => n.weights)).reduce((s, w) => s + w * w, 0);
 

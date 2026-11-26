@@ -1,7 +1,7 @@
 // Lecture des options de la ligne de commande, partagée par train et evaluate.
 //   node dist/src/train.js <dataset> --epochs 3000 --layers 16,8 ...
 import { HIDDEN_ACTIVATIONS } from "./core/network.js";
-import type { ExperimentOptions } from "./core/experiment.js";
+import type { ExperimentOptions } from "./experiment.js";
 import type { HiddenActivation, Optimizer } from "./core/types.js";
 
 const OPTIMIZERS: readonly Optimizer[] = ["sgd", "adam", "rmsprop"];

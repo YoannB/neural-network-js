@@ -1,5 +1,5 @@
 import { relu, reluDerivative, leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
-import { random } from "./random.js";
+import { random, type RandomFn } from "./random.js";
 import type { Activation, Optimizer } from "./types.js";
 
 const GRADIENT_LIMIT = 5;
@@ -32,10 +32,11 @@ export class Neuron {
   z = 0;
   output = 0;
 
-  constructor(inputSize: number, activation: Activation = "leakyrelu", learningRate = 0.0025, optimizer: Optimizer = "sgd", l2 = 0) {
+  /** rand : générateur utilisé pour initialiser les poids (le générateur partagé par défaut). */
+  constructor(inputSize: number, activation: Activation = "leakyrelu", learningRate = 0.0025, optimizer: Optimizer = "sgd", l2 = 0, rand: RandomFn = random) {
     const scale = Math.sqrt(2 / inputSize);
-    this.weights = Array.from({ length: inputSize }, () => (random() * 2 - 1) * scale);
-    this.bias = random() * 0.5 - 0.25;
+    this.weights = Array.from({ length: inputSize }, () => (rand() * 2 - 1) * scale);
+    this.bias = rand() * 0.5 - 0.25;
     this.learningRate = Number(learningRate) || 0.0025;
     this.activation = activation;
     this.optimizer = optimizer;
