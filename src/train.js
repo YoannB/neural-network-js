@@ -35,6 +35,9 @@ function getArg(name, defaultValue) {
 
 const EPOCHS = getArg("epochs", 10000);
 const NEURONS = getArg("neurons", 10);
+// --layers 16,8 : deux couches cachées de 16 puis 8 neurones (remplace --neurons).
+const LAYERS = String(getArg("layers", NEURONS)).split(",").map(Number);
+const ACTIVATION = getArg("activation", "tanh");
 const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
@@ -51,7 +54,7 @@ console.log(`Input size : ${datasetObj.inputSize}`);
 console.log(`Output size: ${datasetObj.outputSize}`);
 console.log(`Task       : ${datasetObj.task}`);
 
-console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
+console.log("Training config:", { EPOCHS, LAYERS, ACTIVATION, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
 
 setSeed(SEED);
 
@@ -101,7 +104,8 @@ const preprocessing = computePreprocessing(trainSamples);
 const net = new Network({
   inputSize: datasetObj.inputSize,
   outputSize: datasetObj.outputSize,
-  hiddenNeurons: NEURONS,
+  hiddenLayers: LAYERS,
+  activation: ACTIVATION,
   learningRate: LR,
   preprocessing,
   task: datasetObj.task,

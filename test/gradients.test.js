@@ -20,15 +20,15 @@ function clone(net) {
     return Network.load(JSON.parse(JSON.stringify(net.toJSON())));
 }
 
-function checkGradients(task, outputSize, x, y) {
+function checkGradients(task, outputSize, x, y, { hiddenLayers = [4], activation = "tanh" } = {}) {
     setSeed(5);
-    const net = new Network({ inputSize: x.length, hiddenNeurons: 4, outputSize, task, learningRate: LR, optimizer: "sgd" });
+    const net = new Network({ inputSize: x.length, hiddenLayers, activation, outputSize, task, learningRate: LR, optimizer: "sgd" });
 
     const trained = clone(net);
     trained.train(x, y);
 
-    for (const layer of ["hidden", "output"]) {
-        net[layer].neurons.forEach((neuron, n) => {
+    net.layers.forEach((netLayer, layer) => {
+        netLayer.neurons.forEach((neuron, n) => {
             neuron.weights.forEach((w, i) => {
                 neuron.weights[i] = w + H;
                 const plus = loss(net, x, y);
@@ -37,7 +37,7 @@ function checkGradients(task, outputSize, x, y) {
                 neuron.weights[i] = w;
 
                 const numerical = (plus - minus) / (2 * H);
-                const analytic = (w - trained[layer].neurons[n].weights[i]) / LR;
+                const analytic = (w - trained.layers[layer].neurons[n].weights[i]) / LR;
 
                 assert.ok(
                     Math.abs(numerical - analytic) < 1e-6 + 1e-4 * Math.abs(numerical),
@@ -45,7 +45,7 @@ function checkGradients(task, outputSize, x, y) {
                 );
             });
         });
-    }
+    });
 }
 
 test("gradients corrects : régression", () => {
@@ -59,4 +59,17 @@ test("gradients corrects : classification binaire (sigmoïde)", () => {
 
 test("gradients corrects : classification multiclasse (softmax)", () => {
     checkGradients("multiclass-classification", 3, [0.3, -0.8, 0.5], [0, 1, 0]);
+});
+
+test("gradients corrects avec plusieurs couches cachées", () => {
+    const deep = { hiddenLayers: [5, 4, 3] };
+    checkGradients("regression", 1, [0.3, -0.8], [0.5], deep);
+    checkGradients("binary-classification", 1, [0.3, -0.8], [1], deep);
+    checkGradients("multiclass-classification", 3, [0.3, -0.8, 0.5], [0, 0, 1], deep);
+});
+
+test("gradients corrects pour chaque activation cachée", () => {
+    for (const activation of ["tanh", "relu", "leakyrelu", "sigmoid"]) {
+        checkGradients("binary-classification", 1, [0.3, -0.8], [1], { hiddenLayers: [4, 3], activation });
+    }
 });

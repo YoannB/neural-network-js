@@ -32,8 +32,10 @@ export class Layer {
         return this.outputs;
     }
 
+    // Met à jour les neurones et renvoie leurs deltas (dérivées de la perte par
+    // rapport à z), qui servent à calculer l'erreur de la couche précédente.
     backward(errors, iteration = 1, { errorsAreDeltas = false } = {}) {
-        this.neurons.forEach((n, i) => n.backward(errors[i], iteration, errorsAreDeltas));
+        return this.neurons.map((n, i) => n.backward(errors[i], iteration, errorsAreDeltas));
     }
 
     getWeightStats() {

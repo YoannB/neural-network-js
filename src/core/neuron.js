@@ -1,4 +1,4 @@
-import { leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
+import { relu, reluDerivative, leakyRelu, leakyReluDerivative, tanh, tanhDerivative, sigmoid, sigmoidDerivative } from "./activations.js";
 import { random } from "./random.js";
 
 export class Neuron {
@@ -54,7 +54,9 @@ export class Neuron {
       this.z = 0;
     }
 
-    if (this.activation === "leakyrelu") {
+    if (this.activation === "relu") {
+      this.output = relu(this.z);
+    } else if (this.activation === "leakyrelu") {
       this.output = leakyRelu(this.z);
     } else if (this.activation === "tanh") {
       this.output = tanh(this.z);
@@ -81,6 +83,8 @@ export class Neuron {
 
     if (errorIsDelta) {
       delta = error;
+    } else if (this.activation === "relu") {
+      delta = error * reluDerivative(this.z);
     } else if (this.activation === "leakyrelu") {
       delta = error * leakyReluDerivative(this.z);
     } else if (this.activation === "tanh") {
@@ -104,6 +108,8 @@ export class Neuron {
     } else {
       this.updateSGD(delta, clip);
     }
+
+    return delta;
   }
 
   updateSGD(delta, clip) {
