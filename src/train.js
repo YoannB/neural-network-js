@@ -1,140 +1,52 @@
 import fs from "fs";
-import { Network } from "./core/network.js";
-import getDataset from "./datasets/index.js";
-import { setSeed } from "./core/random.js";
-import { trainNetwork } from "./core/training.js";
+import { parseTrainingOptions } from "./cli.js";
+import { runExperiment } from "./core/experiment.js";
 
-// -------------------------
-// CLI parsing (cohérent avec exec.js)
-// -------------------------
+// node src/train.js <dataset> [options] : entraîne et sauvegarde models/<dataset>.json
 
-const dataset = process.argv[2] || "square";
+const datasetName = process.argv[2] || "square";
+const modelName = datasetName;
+const options = parseTrainingOptions(process.argv.slice(3));
 
-let argsStartIndex = 3;
-
-const modelName = dataset;
-
-// -------------------------
-// Hyperparams
-// -------------------------
-
-const args = process.argv.slice(argsStartIndex);
-
-function getArg(name, defaultValue) {
-  const index = args.indexOf(`--${name}`);
-  if (index !== -1) {
-    const value = args[index + 1];
-    if (value === undefined) return defaultValue;
-
-    const numValue = Number(value);
-    if (Number.isFinite(numValue)) return numValue;
-    return value;
-  }
-  return defaultValue;
-}
-
-const EPOCHS = getArg("epochs", 10000);
-const NEURONS = getArg("neurons", 10);
-// --layers 16,8 : deux couches cachées de 16 puis 8 neurones (remplace --neurons).
-const LAYERS = String(getArg("layers", NEURONS)).split(",").map(Number);
-const ACTIVATION = getArg("activation", "tanh");
-const LR = getArg("lr", 0.0025);
-const NOISE = getArg("noise", 0.0);
-const OPTIMIZER = getArg("optimizer", "adam");
-const SEED = getArg("seed", 42);
-const TARGET_LOSS = getArg("target-loss", 0.0001);
-
-const datasetObj = await getDataset(dataset, { seed: SEED });
-
-// -------------------------
-console.log(`Dataset    : ${datasetObj.name}`);
-console.log(`Model name : ${modelName}`);
-console.log(`Samples    : ${datasetObj.samples.length + (datasetObj.testSamples?.length ?? 0)}`);
-console.log(`Input size : ${datasetObj.inputSize}`);
-console.log(`Output size: ${datasetObj.outputSize}`);
-console.log(`Task       : ${datasetObj.task}`);
-
-console.log("Training config:", { EPOCHS, LAYERS, ACTIVATION, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
-
-setSeed(SEED);
-
-// -------------------------
-// Dataset split : seuls les exemples d'entraînement servent à apprendre
-// -------------------------
-
-const trainSamples = datasetObj.samples;
-const testCount = datasetObj.testSamples?.length ?? 0;
-
-console.log(`Training samples: ${trainSamples.length}`);
-if (testCount > 0) {
-  console.log(`Test samples    : ${testCount} (non utilisés pour l'entraînement)`);
-}
-
-// -------------------------
-// Preprocessing
-// -------------------------
-
-// Les entrées sont divisées par leur plus grande valeur absolue (sur les
-// exemples d'entraînement). Les sorties ne sont pas normalisées.
-function computePreprocessing(samples) {
-  let maxX = 0;
-
-  for (const s of samples) {
-    for (const v of s.x) {
-      const a = Math.abs(v);
-      if (a > maxX) maxX = a;
-    }
-  }
-
-  return { xScale: maxX || 1 };
-}
-
-const preprocessing = computePreprocessing(trainSamples);
-
-// -------------------------
-// Network
-// -------------------------
-
-const net = new Network({
-  inputSize: datasetObj.inputSize,
-  outputSize: datasetObj.outputSize,
-  hiddenLayers: LAYERS,
-  activation: ACTIVATION,
-  learningRate: LR,
-  preprocessing,
-  task: datasetObj.task,
-  optimizer: OPTIMIZER
-});
-
-// -------------------------
-// Training
-// -------------------------
-
-console.time("Training");
-
-const result = trainNetwork(net, trainSamples, {
-  epochs: EPOCHS,
-  noise: NOISE,
-  targetLoss: TARGET_LOSS,
+const { result, model } = await runExperiment(datasetName, options, {
+  onStart: ({ dataset }) => {
+    printHeader(dataset);
+    console.time("Training");
+  },
   onEpoch: ({ epoch, loss, last }) => {
     if (epoch === 1 || epoch % 500 === 0 || last) {
-      console.log(`Epoch ${epoch}/${EPOCHS} - Loss: ${loss.toFixed(6)}`);
+      console.log(`Epoch ${epoch}/${options.epochs} - Loss: ${loss.toFixed(6)}`);
     }
   }
 });
 
+function printHeader(ds) {
+  console.log(`Dataset    : ${ds.name}`);
+  console.log(`Model name : ${modelName}`);
+  console.log(`Samples    : ${ds.samples.length + (ds.testSamples?.length ?? 0)}`);
+  console.log(`Input size : ${ds.inputSize}`);
+  console.log(`Output size: ${ds.outputSize}`);
+  console.log(`Task       : ${ds.task}`);
+
+  const { epochs, layers, activation, lr, noise, optimizer, seed, targetLoss, datasetOptions } = options;
+  console.log("Training config:", {
+    EPOCHS: epochs, LAYERS: layers, ACTIVATION: activation, LR: lr, NOISE: noise,
+    OPTIMIZER: optimizer, SEED: seed, TARGET_LOSS: targetLoss,
+    ...(Object.keys(datasetOptions).length > 0 ? { DATASET: datasetOptions } : {})
+  });
+
+  console.log(`Training samples: ${ds.samples.length}`);
+  const testCount = ds.testSamples?.length ?? 0;
+  if (testCount > 0) {
+    console.log(`Test samples    : ${testCount} (non utilisés pour l'entraînement)`);
+  }
+}
+
 if (result.reachedTarget) {
-  console.log(`Perte cible ${TARGET_LOSS} atteinte à l'époque ${result.epochs}`);
+  console.log(`Perte cible ${options.targetLoss} atteinte à l'époque ${result.epochs}`);
 }
 
 console.timeEnd("Training");
-
-// -------------------------
-// Save model
-// -------------------------
-
-const model = net.toJSON();
-model.config.seed = SEED;
 
 fs.mkdirSync("./models", { recursive: true });
 fs.writeFileSync(`./models/${modelName}.json`, JSON.stringify(model, null, 2));

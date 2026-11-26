@@ -18,8 +18,9 @@ const rawModel = JSON.parse(
 const net = Network.load(rawModel);
 
 // -------------------------
-// Même graine qu'à l'entraînement : on retrouve la même séparation train/test.
-const dataset = await getDataset(datasetName, { seed: rawModel.config.seed });
+// Même graine et mêmes options qu'à l'entraînement : on retrouve la même
+// séparation train/test et la même préparation des données.
+const dataset = await getDataset(datasetName, { seed: rawModel.config.seed, ...rawModel.config.dataset });
 const samples = dataset.samples;
 const task = dataset.task ?? "regression";
 
