@@ -60,10 +60,10 @@ console.log("Debug predict :", input);
 
 const debug = net.debugPredict(input);
 
-console.log("\nHidden:");
-debug.hidden.forEach(h =>
-  console.log(`Neuron ${h.neuron} | a=${h.weight}`)
-);
+debug.hidden.forEach((layer, l) => {
+  console.log(`\nHidden layer ${l + 1}:`);
+  layer.forEach((a, i) => console.log(`Neuron ${i} | a=${a}`));
+});
 
 const output = Array.isArray(debug.output) ? JSON.stringify(debug.output) : debug.output;
 console.log(`\nOutput: ${output}`);

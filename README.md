@@ -29,23 +29,12 @@ Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claud
 | `step-06-images` | Classification d'images |
 | `step-07-optimizers` | Optimiseurs Adam et RMSprop |
 | `step-08-multiclass` | Classification multiclasse ← version de `main` |
-| **`claude-01-fiabilite`** | **Corrections, graine aléatoire, séparation entraînement / test, tests** |
+| `claude-01-fiabilite` | Corrections, graine aléatoire, séparation entraînement / test, tests |
+| **`claude-02-api`** | **Couches cachées configurables, sauvegarde complète des optimiseurs, nettoyage** |
 
 Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js 18 ou plus.
 
 ---
-
-## claude-01 — Fiabilité
-
-Cette étape corrige les points relevés dans les [notes par étape](#notes-par-étape) et rend les résultats vérifiables.
-
-- **Graine aléatoire** (`src/core/random.js`) : l'initialisation des poids, le mélange des données et le bruit dépendent de `--seed` (42 par défaut). Deux entraînements avec la même graine donnent le même modèle. La graine est enregistrée dans le modèle.
-- **Séparation entraînement / test** (`src/datasets/split.js`) : `rps` et `images` réservent 20 % de leurs exemples au test. `train` n'apprend que sur les 80 % restants et `table` évalue les deux parties séparément.
-- **Gradient de la sortie sigmoïde** : en classification binaire, le gradient `p − y` n'est plus multiplié par la dérivée de la sigmoïde. Sur XOR, la perte atteinte en 3000 époques est environ dix fois plus basse qu'avant.
-- **Critère d'arrêt** (`src/core/training.js`) : l'entraînement s'arrête quand la perte moyenne descend sous `--target-loss` (0,0001 par défaut, 0 pour désactiver). Les entropies croisées ne peuvent plus être négatives.
-- **Jeux de données chargés à la demande** : le dossier `tmp/oranges/` n'est plus nécessaire pour les jeux autres que `images`.
-- **Sorties multiclasses** : `table` les lit avec `predict`, et `exec` affiche toutes les probabilités.
-- **Tests** : `npm test` lance les tests avec `node:test`, le module de test intégré à Node, sans dépendance supplémentaire. Ils vérifient notamment la rétropropagation par différences finies pour les trois tâches.
 
 ## Lancer
 
@@ -57,7 +46,7 @@ npm run table -- rps
 npm run exec -- rps 1 0 0
 ```
 
-Options de `train` : `--epochs`, `--neurons`, `--lr`, `--noise`, `--optimizer` (`sgd`, `adam`, `rmsprop`), `--seed`, `--target-loss`.
+Options de `train` : `--epochs`, `--layers` (par exemple `16,8`), `--neurons` (une seule couche), `--activation`, `--lr`, `--noise`, `--optimizer` (`sgd`, `adam`, `rmsprop`), `--seed`, `--target-loss`.
 
 Sous Windows PowerShell 5.1, `npm run train -- rps --epochs 500` peut perdre le `--`, et les options ne sont alors pas transmises. Dans ce cas, appelle les scripts directement : `node src/train.js rps --epochs 500`.
 
@@ -73,17 +62,13 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
    PIXABAY_API_KEY=ta_clé
    ```
 
-2. Télécharge 100 images. Node ne lit pas les fichiers `.env` tout seul : l'option `--env-file` (Node 20.6 ou plus) s'en charge.
+2. Télécharge 100 images. Le script lit `.env.local` (ou `.env`) lui-même avec Node 20.12 ou plus ; sinon, utilise `node --env-file=.env.local …` ou définis `PIXABAY_API_KEY` dans le terminal. Une image déjà présente n'est pas téléchargée de nouveau.
 
    ```sh
-   node --env-file=.env.local scripts/download-oranges.js
+   node scripts/download-oranges.js
    ```
 
-   Sans cette option, il faut définir la variable `PIXABAY_API_KEY` dans le terminal.
-
-3. Trie les images à la main. Le script les nomme `orange_1.jpg`, `orange_2.jpg`… : sans `_ok` dans le nom, elles seraient toutes de la classe 0 et le réseau n'aurait rien à apprendre. Renomme chaque fichier :
-   - `orange_12_ok.jpg` pour une vraie orange ;
-   - `orange_13_ko.jpg` pour une image que le réseau doit rejeter.
+3. Trie les images à la main. Le script les nomme `orange_1_ko.jpg`, `orange_2_ko.jpg`…, c'est-à-dire toutes de la classe 0. Renomme en `_ok` celles qui montrent une orange, par exemple `orange_12_ok.jpg`. Sans ce tri, le réseau n'aurait rien à apprendre.
 
 4. Entraîne puis évalue. Avec la descente de gradient simple, la perte baisse régulièrement ; avec Adam, elle oscille sur ce jeu.
 
@@ -93,7 +78,66 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
    node src/exec.js images chemin/vers/une-image.jpg
    ```
 
-## Exemples d'exécution
+## claude-02 — Couches et API
+
+- **Couches cachées configurables** : `--layers 16,8` crée deux couches cachées de 16 puis 8 neurones (`--neurons 10` reste un raccourci pour une seule couche). Dans le code : `new Network({ hiddenLayers: [16, 8], ... })`. La rétropropagation parcourt toutes les couches.
+- **Activation cachée au choix** : `--activation` accepte `tanh` (par défaut), `relu`, `leakyrelu` et `sigmoid`.
+- **Sauvegarde complète d'Adam et RMSprop** : le modèle enregistre aussi les moments du biais (`mBias`, `vBias`). Reprendre un entraînement depuis un modèle sauvegardé donne exactement le même résultat qu'un entraînement continu.
+- **Nettoyage** : `yScale` (calculé mais jamais utilisé), `denormalizeY`, `computeOutputGradient`, `getWeightStats` et `lastError` sont retirés. Les modèles des étapes 5 à 8, au format `hidden` / `output`, se chargent encore.
+- **Script d'images** : `scripts/download-oranges.js` lit la clé dans `.env.local` et nomme les images `_ko` par défaut.
+- **Tests** : 29 tests, dont la vérification des gradients avec trois couches cachées et pour chaque activation, et la reprise d'un entraînement Adam ou RMSprop.
+
+### Exemples (claude-02)
+
+```
+$ npm run train -- rps --layers 8,8 --activation relu          (extrait)
+  LAYERS: [ 8, 8 ],
+  ACTIVATION: 'relu',
+Epoch 1/10000 - Loss: 0.435692
+Epoch 9/10000 - Loss: 0.000093
+Perte cible 0.0001 atteinte à l'époque 9
+Training: 75.764ms
+```
+
+```
+$ npm run exec -- rps 0 0 1          (extrait)
+Hidden layer 2:
+Neuron 0 | a=0
+Neuron 1 | a=0
+Neuron 2 | a=0
+Neuron 3 | a=0
+Neuron 4 | a=2.704151
+Neuron 5 | a=3.577357
+Neuron 6 | a=3.839604
+Neuron 7 | a=0
+
+Output: [0.999913,0.000075,0.000011]
+```
+
+Contre les ciseaux (classe 2), le réseau joue la pierre (classe 0). Avec ReLU, une partie des neurones reste à 0 pour cette entrée.
+
+Plus de couches n'est pas toujours mieux. Sur `square` (x², 51 points, Adam, 10 000 époques, sans arrêt anticipé), une couche de 10 neurones fait mieux que deux couches de 16 et 8 :
+
+| Couches | Graine 1 | Graine 2 | Graine 3 | Graine 42 |
+|---|---|---|---|---|
+| `10` | 86 % (RMSE 0,051) | 82 % (0,058) | 82 % (0,160) | 88 % (0,077) |
+| `16,8` | 24 % (0,958) | 76 % (0,328) | 55 % (0,303) | 29 % (0,576) |
+
+Le pourcentage est celui de `table` : la part des points prédits à 5 % près. La RMSE est l'erreur quadratique moyenne, en unités de y. Avec deux couches, la perte oscille et les neurones de la seconde couche saturent à ±1 : les sorties, jusqu'à 25, ne sont pas normalisées. Normaliser les sorties aide la version à deux couches mais dégrade la version à une couche (RMSE de 0,16 à 0,32 avec Adam) ; ce n'est donc pas fait ici.
+
+## claude-01 — Fiabilité
+
+Cette étape corrige les points relevés dans les [notes par étape](#notes-par-étape) et rend les résultats vérifiables.
+
+- **Graine aléatoire** (`src/core/random.js`) : l'initialisation des poids, le mélange des données et le bruit dépendent de `--seed` (42 par défaut). Deux entraînements avec la même graine donnent le même modèle. La graine est enregistrée dans le modèle.
+- **Séparation entraînement / test** (`src/datasets/split.js`) : `rps` et `images` réservent 20 % de leurs exemples au test. `train` n'apprend que sur les 80 % restants et `table` évalue les deux parties séparément.
+- **Gradient de la sortie sigmoïde** : en classification binaire, le gradient `p − y` n'est plus multiplié par la dérivée de la sigmoïde. Sur XOR, la perte atteinte en 3000 époques est environ dix fois plus basse qu'avant.
+- **Critère d'arrêt** (`src/core/training.js`) : l'entraînement s'arrête quand la perte moyenne descend sous `--target-loss` (0,0001 par défaut, 0 pour désactiver). Les entropies croisées ne peuvent plus être négatives.
+- **Jeux de données chargés à la demande** : le dossier `tmp/oranges/` n'est plus nécessaire pour les jeux autres que `images`.
+- **Sorties multiclasses** : `table` les lit avec `predict`, et `exec` affiche toutes les probabilités.
+- **Tests** : `npm test` lance les tests avec `node:test`, le module de test intégré à Node, sans dépendance supplémentaire. Ils vérifient notamment la rétropropagation par différences finies pour les trois tâches.
+
+### Exemples (claude-01)
 
 ```
 $ npm test          (extrait)

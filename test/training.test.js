@@ -84,3 +84,22 @@ test("un modèle sauvegardé puis rechargé donne les mêmes prédictions", asyn
         assert.deepEqual(loaded.predict(x), net.predict(x));
     }
 });
+
+for (const optimizer of ["adam", "rmsprop"]) {
+    test(`reprendre un entraînement ${optimizer} sauvegardé donne le même modèle`, async () => {
+        const xor = await getDataset("xor");
+        setSeed(4);
+        const options = { inputSize: 2, hiddenLayers: [6], task: "binary-classification", optimizer };
+
+        const continuous = new Network(options);
+        trainNetwork(continuous, xor.samples, { epochs: 100 });
+
+        setSeed(4);
+        const first = new Network(options);
+        trainNetwork(first, xor.samples, { epochs: 50 });
+        const resumed = Network.load(JSON.parse(JSON.stringify(first.toJSON())));
+        trainNetwork(resumed, xor.samples, { epochs: 50 });
+
+        assert.deepEqual(resumed.toJSON().layers, continuous.toJSON().layers);
+    });
+}

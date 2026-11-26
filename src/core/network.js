@@ -1,32 +1,62 @@
 import { Layer } from "./layer.js";
 
+// Activation de la couche de sortie selon la tâche.
+const OUTPUT_ACTIVATIONS = {
+    "regression": "linear",
+    "binary-classification": "sigmoid",
+    "multiclass-classification": "softmax"
+};
+
+export const HIDDEN_ACTIVATIONS = ["tanh", "relu", "leakyrelu", "sigmoid"];
+
 export class Network {
+    // hiddenLayers : nombre de neurones de chaque couche cachée, par exemple [16, 8].
+    // hiddenNeurons reste accepté pour une seule couche cachée.
     constructor({
         inputSize = 1,
+        hiddenLayers = null,
         hiddenNeurons = 10,
+        activation = "tanh",
         learningRate = 0.0025,
         preprocessing = null,
         task = "regression",
         optimizer = "sgd",
         outputSize = 1
     } = {}) {
+        if (!OUTPUT_ACTIVATIONS[task]) {
+            throw new Error(`Tâche inconnue: ${task}`);
+        }
+        if (!HIDDEN_ACTIVATIONS.includes(activation)) {
+            throw new Error(`Activation inconnue: ${activation} (disponibles : ${HIDDEN_ACTIVATIONS.join(", ")})`);
+        }
+
+        const sizes = hiddenLayers ?? [hiddenNeurons];
+        if (sizes.length === 0 || !sizes.every(n => Number.isInteger(n) && n > 0)) {
+            throw new Error(`Couches cachées invalides: ${JSON.stringify(sizes)}`);
+        }
+
         this.inputSize = inputSize;
+        this.outputSize = task === "binary-classification" ? 1 : outputSize;
+        this.hiddenLayers = [...sizes];
+        this.activation = activation;
+        this.learningRate = learningRate;
         this.preprocessing = preprocessing;
         this.task = task;
         this.optimizer = optimizer;
-        this.outputSize = outputSize;
-
-        this.hidden = new Layer(inputSize, hiddenNeurons, "tanh", learningRate, optimizer);
-
-        if (task === "binary-classification") {
-            this.output = new Layer(hiddenNeurons, 1, "sigmoid", learningRate, optimizer);
-        } else if (task === "multiclass-classification") {
-            this.output = new Layer(hiddenNeurons, outputSize, "softmax", learningRate, optimizer);
-        } else {
-            this.output = new Layer(hiddenNeurons, outputSize, "linear", learningRate, optimizer);
-        }
-
         this.iteration = 0;
+
+        // Couches cachées puis couche de sortie : chacune reçoit la sortie de la précédente.
+        this.layers = [];
+        let previousSize = inputSize;
+        for (const size of sizes) {
+            this.layers.push(new Layer(previousSize, size, activation, learningRate, optimizer));
+            previousSize = size;
+        }
+        this.layers.push(new Layer(previousSize, this.outputSize, OUTPUT_ACTIVATIONS[task], learningRate, optimizer));
+    }
+
+    get output() {
+        return this.layers[this.layers.length - 1];
     }
 
     // -------------------------
@@ -40,18 +70,23 @@ export class Network {
             outputSize: data.meta?.outputSize ?? 1
         });
 
-        data.hidden.neurons.forEach((saved, i) => {
-            net.hidden.neurons[i].weights = saved.weights;
-            net.hidden.neurons[i].bias = saved.bias;
-            net.hidden.neurons[i].m = saved.m;
-            net.hidden.neurons[i].v = saved.v;
-        });
+        // Les modèles des étapes 5 à 8 ont deux couches nommées hidden et output.
+        const savedLayers = data.layers ?? [data.hidden, data.output];
+        if (savedLayers.length !== net.layers.length) {
+            throw new Error(`Modèle incohérent: ${savedLayers.length} couches enregistrées, ${net.layers.length} attendues`);
+        }
 
-        data.output.neurons.forEach((saved, i) => {
-            net.output.neurons[i].weights = saved.weights;
-            net.output.neurons[i].bias = saved.bias;
-            net.output.neurons[i].m = saved.m;
-            net.output.neurons[i].v = saved.v;
+        savedLayers.forEach((savedLayer, l) => {
+            savedLayer.neurons.forEach((saved, i) => {
+                const neuron = net.layers[l].neurons[i];
+                neuron.weights = saved.weights;
+                neuron.bias = saved.bias;
+                neuron.m = saved.m;
+                neuron.v = saved.v;
+                // Moments du biais (Adam, RMSprop) : absents des modèles des étapes 7 et 8.
+                neuron.mBias = saved.mBias ?? 0;
+                neuron.vBias = saved.vBias ?? 0;
+            });
         });
 
         net.iteration = data.config.iteration || 0;
@@ -85,13 +120,8 @@ export class Network {
         return xVec.map(x => x / this.preprocessing.xScale);
     }
 
-    denormalizeY(y) {
-        if (!this.preprocessing) return y;
-        return y * this.preprocessing.yScale;
-    }
-
     // -------------------------
-    // Loss helpers
+    // Loss
     // -------------------------
     computeLoss(yPred, yTrue) {
         if (this.task === "binary-classification") {
@@ -107,21 +137,22 @@ export class Network {
         }
     }
 
-    computeOutputGradient(yPred, yTrue) {
-        return yPred - yTrue;
-    }
-
     // -------------------------
-    // Inference (PROPRE)
+    // Inference
     // -------------------------
+    // Renvoie l'entrée, l'entrée normalisée et la sortie de chaque couche.
     forward(input) {
         const x = this.ensureVector(input);
         const xNorm = this.normalizeX(x);
 
-        const h = this.hidden.forward(xNorm);
-        const yVec = this.output.forward(h);
+        const activations = [];
+        let current = xNorm;
+        for (const layer of this.layers) {
+            current = layer.forward(current);
+            activations.push(current);
+        }
 
-        return { x, xNorm, h, yVec };
+        return { x, xNorm, hidden: activations.slice(0, -1), yVec: current };
     }
 
     predict(input) {
@@ -140,33 +171,32 @@ export class Network {
     train(input, yTrueVec) {
         this.iteration++;
 
-        const x = this.ensureVector(input);
-        const xNorm = this.normalizeX(x);
-
-        const h = this.hidden.forward(xNorm);
-        const yPred = this.output.forward(h);
+        const { yVec: yPred } = this.forward(input);
 
         // Gradient de la perte par rapport aux entrées des neurones de sortie (z).
         // Il vaut p - y pour les trois cas : sigmoïde + entropie croisée binaire,
         // softmax + entropie croisée, sortie linéaire + erreur quadratique (à un
         // facteur 2 près, absorbé par le taux d'apprentissage).
-        let gradients;
+        let errors = yPred.map((p, i) => p - yTrueVec[i]);
+        let errorsAreDeltas = true;
 
-        if (this.task === "multiclass-classification") {
-            gradients = yPred.map((p, i) => p - yTrueVec[i]);
-        } else {
-            gradients = [yPred[0] - yTrueVec[0]];
+        // Rétropropagation de la sortie vers l'entrée. Les poids de chaque couche
+        // sont copiés avant sa mise à jour : l'erreur de la couche précédente se
+        // calcule avec les poids utilisés pendant la propagation avant.
+        for (let l = this.layers.length - 1; l >= 0; l--) {
+            const layer = this.layers[l];
+            const weights = layer.neurons.map(n => [...n.weights]);
+
+            const deltas = layer.backward(errors, this.iteration, { errorsAreDeltas });
+
+            if (l > 0) {
+                const previousSize = this.layers[l - 1].neurons.length;
+                errors = Array.from({ length: previousSize }, (_, i) =>
+                    deltas.reduce((sum, d, j) => sum + d * weights[j][i], 0)
+                );
+                errorsAreDeltas = false;
+            }
         }
-
-        const weights = this.output.neurons.map(n => [...n.weights]);
-
-        this.output.backward(gradients, this.iteration, { errorsAreDeltas: true });
-
-        const hiddenErrors = this.hidden.neurons.map((_, i) => {
-            return gradients.reduce((sum, g, j) => sum + g * weights[j][i], 0);
-        });
-
-        this.hidden.backward(hiddenErrors, this.iteration);
 
         return this.computeLoss(
             this.task === "multiclass-classification" ? yPred : yPred[0],
@@ -175,21 +205,19 @@ export class Network {
     }
 
     // -------------------------
-    // Debug (MAINTENANT COHÉRENT)
+    // Debug
     // -------------------------
     debugPredict(input) {
         const out = this.forward(input);
+        const round = v => +v.toFixed(6);
 
         return {
             input: out.x,
             inputNorm: out.xNorm,
-            hidden: out.h.map((n, i) => ({
-                neuron: i,
-                weight: +n.toFixed(6)
-            })),
+            hidden: out.hidden.map(layer => layer.map(round)),
             output: this.task === "multiclass-classification"
-                ? out.yVec.map(v => +v.toFixed(6))
-                : +out.yVec[0].toFixed(6)
+                ? out.yVec.map(round)
+                : round(out.yVec[0])
         };
     }
 
@@ -205,29 +233,25 @@ export class Network {
             },
             config: {
                 inputSize: this.inputSize,
-                hiddenNeurons: this.hidden.neurons.length,
-                learningRate: this.hidden.neurons[0].learningRate,
+                hiddenLayers: this.hiddenLayers,
+                activation: this.activation,
+                learningRate: this.learningRate,
                 preprocessing: this.preprocessing,
                 optimizer: this.optimizer,
                 iteration: this.iteration,
                 outputSize: this.outputSize
             },
-            hidden: {
-                neurons: this.hidden.neurons.map(n => ({
+            layers: this.layers.map(layer => ({
+                activation: layer.activation,
+                neurons: layer.neurons.map(n => ({
                     weights: n.weights,
                     bias: n.bias,
                     m: n.m,
-                    v: n.v
+                    v: n.v,
+                    mBias: n.mBias,
+                    vBias: n.vBias
                 }))
-            },
-            output: {
-                neurons: this.output.neurons.map(n => ({
-                    weights: n.weights,
-                    bias: n.bias,
-                    m: n.m,
-                    v: n.v
-                }))
-            }
+            }))
         };
     }
 }

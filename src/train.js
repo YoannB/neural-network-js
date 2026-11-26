@@ -35,6 +35,9 @@ function getArg(name, defaultValue) {
 
 const EPOCHS = getArg("epochs", 10000);
 const NEURONS = getArg("neurons", 10);
+// --layers 16,8 : deux couches cachées de 16 puis 8 neurones (remplace --neurons).
+const LAYERS = String(getArg("layers", NEURONS)).split(",").map(Number);
+const ACTIVATION = getArg("activation", "tanh");
 const LR = getArg("lr", 0.0025);
 const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
@@ -51,7 +54,7 @@ console.log(`Input size : ${datasetObj.inputSize}`);
 console.log(`Output size: ${datasetObj.outputSize}`);
 console.log(`Task       : ${datasetObj.task}`);
 
-console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
+console.log("Training config:", { EPOCHS, LAYERS, ACTIVATION, LR, NOISE, OPTIMIZER, SEED, TARGET_LOSS });
 
 setSeed(SEED);
 
@@ -71,25 +74,19 @@ if (testCount > 0) {
 // Preprocessing
 // -------------------------
 
+// Les entrées sont divisées par leur plus grande valeur absolue (sur les
+// exemples d'entraînement). Les sorties ne sont pas normalisées.
 function computePreprocessing(samples) {
   let maxX = 0;
-  let maxY = 0;
 
   for (const s of samples) {
     for (const v of s.x) {
       const a = Math.abs(v);
       if (a > maxX) maxX = a;
     }
-    for (const v of s.y) {
-      const a = Math.abs(v);
-      if (a > maxY) maxY = a;
-    }
   }
 
-  return {
-    xScale: maxX || 1,
-    yScale: maxY || 1
-  };
+  return { xScale: maxX || 1 };
 }
 
 const preprocessing = computePreprocessing(trainSamples);
@@ -101,7 +98,8 @@ const preprocessing = computePreprocessing(trainSamples);
 const net = new Network({
   inputSize: datasetObj.inputSize,
   outputSize: datasetObj.outputSize,
-  hiddenNeurons: NEURONS,
+  hiddenLayers: LAYERS,
+  activation: ACTIVATION,
   learningRate: LR,
   preprocessing,
   task: datasetObj.task,
