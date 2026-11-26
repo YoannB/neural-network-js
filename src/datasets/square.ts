@@ -1,4 +1,6 @@
-const samples = [];
+import type { Dataset, Sample } from "../core/types.js";
+
+const samples: Sample[] = [];
 
 for (let x = 0; x <= 5; x += 0.1) {
     samples.push({
@@ -13,4 +15,4 @@ export default {
     outputSize: 1,
     task: "regression",
     samples
-};
+} satisfies Dataset;

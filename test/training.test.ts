@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Network } from "../src/core/network.js";
+import { Network, type NetworkOptions } from "../src/core/network.js";
 import { setSeed } from "../src/core/random.js";
 import { trainNetwork } from "../src/core/training.js";
 import getDataset from "../src/datasets/index.js";
+import type { Dataset } from "../src/core/types.js";
 
-function buildNetwork(dataset, seed) {
+function buildNetwork(dataset: Dataset, seed: number): Network {
     setSeed(seed);
     return new Network({
         inputSize: dataset.inputSize,
@@ -16,7 +17,7 @@ function buildNetwork(dataset, seed) {
     });
 }
 
-const argmax = v => v.indexOf(Math.max(...v));
+const argmax = (v: number[]) => v.indexOf(Math.max(...v));
 
 test("XOR est appris (classification binaire)", async () => {
     const xor = await getDataset("xor");
@@ -25,7 +26,7 @@ test("XOR est appris (classification binaire)", async () => {
 
     assert.ok(result.reachedTarget, `perte finale ${result.loss}`);
     for (const { x, y } of xor.samples) {
-        assert.equal(net.predict(x) >= 0.5 ? 1 : 0, y[0], `XOR(${x})`);
+        assert.equal(net.predictValue(x) >= 0.5 ? 1 : 0, y[0], `XOR(${x})`);
     }
 });
 
@@ -34,8 +35,8 @@ test("pierre-feuille-ciseaux : 100 % sur les exemples de test", async () => {
     const net = buildNetwork(rps, 1);
     trainNetwork(net, rps.samples, { epochs: 500, targetLoss: 0.001 });
 
-    for (const { x, y } of rps.testSamples) {
-        assert.equal(argmax(net.predict(x)), argmax(y));
+    for (const { x, y } of rps.testSamples ?? []) {
+        assert.equal(argmax(net.predictProbabilities(x)), argmax(y));
     }
 });
 
@@ -80,16 +81,16 @@ test("un modèle sauvegardé puis rechargé donne les mêmes prédictions", asyn
     trainNetwork(net, rps.samples, { epochs: 20 });
 
     const loaded = Network.load(JSON.parse(JSON.stringify(net.toJSON())));
-    for (const { x } of rps.testSamples.slice(0, 10)) {
+    for (const { x } of (rps.testSamples ?? []).slice(0, 10)) {
         assert.deepEqual(loaded.predict(x), net.predict(x));
     }
 });
 
-for (const optimizer of ["adam", "rmsprop"]) {
+for (const optimizer of ["adam", "rmsprop"] as const) {
     test(`reprendre un entraînement ${optimizer} sauvegardé donne le même modèle`, async () => {
         const xor = await getDataset("xor");
         setSeed(4);
-        const options = { inputSize: 2, hiddenLayers: [6], task: "binary-classification", optimizer };
+        const options: NetworkOptions = { inputSize: 2, hiddenLayers: [6], task: "binary-classification", optimizer };
 
         const continuous = new Network(options);
         trainNetwork(continuous, xor.samples, { epochs: 100 });

@@ -9,7 +9,7 @@ for (const file of [".env.local", ".env"]) {
     }
 }
 
-const API_KEY = process.env.PIXABAY_API_KEY;
+const API_KEY = process.env.PIXABAY_API_KEY ?? "";
 if (!API_KEY) {
     console.error("Définis PIXABAY_API_KEY dans .env.local ou dans les variables d'environnement");
     process.exit(1);
@@ -63,7 +63,7 @@ async function main() {
             await fs.writeFile(filepath, buffer);
             console.log(`✔ ${filepath}`);
         } catch (err) {
-            console.error(`✖ Erreur image ${i + 1}: ${err.message}`);
+            console.error(`✖ Erreur image ${i + 1}: ${(err as Error).message}`);
         }
     }
 

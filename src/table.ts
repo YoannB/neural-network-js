@@ -1,6 +1,7 @@
 import fs from "fs";
 import { Network } from "./core/network.js";
 import getDataset from "./datasets/index.js";
+import type { ModelJSON, Sample } from "./core/types.js";
 
 // -------------------------
 const THRESHOLD = 0.5;
@@ -11,7 +12,7 @@ const datasetName = process.argv[2] || "square";
 const modelName = datasetName;
 
 // -------------------------
-const rawModel = JSON.parse(
+const rawModel: ModelJSON = JSON.parse(
     fs.readFileSync(`./models/${modelName}.json`, "utf-8")
 );
 
@@ -29,7 +30,7 @@ const testSamples = dataset.testSamples ?? [];
 const hasSplit = testSamples.length > 0;
 
 // -------------------------
-function evaluate(samples, title) {
+function evaluate(samples: Sample[], title: string): number {
     const LABEL_WIDTH = Math.max(
         40,
         ...samples.map(s => (s.label?.length ?? 0))
@@ -64,7 +65,7 @@ function evaluate(samples, title) {
 
         if (task === "multiclass-classification") {
             const yTrueVec = y;
-            const yPredVec = net.predict(x);
+            const yPredVec = net.predictProbabilities(x);
 
             const trueClass = yTrueVec.indexOf(Math.max(...yTrueVec));
             const predClass = yPredVec.indexOf(Math.max(...yPredVec));
@@ -78,7 +79,7 @@ function evaluate(samples, title) {
 
         else if (task === "binary-classification") {
             const yTrue = y[0];
-            const yPred = net.predict(x);
+            const yPred = net.predictValue(x);
 
             errPct = yTrue > 0
                 ? Math.abs(yPred - yTrue) / Math.abs(yTrue) * 100
@@ -96,7 +97,7 @@ function evaluate(samples, title) {
 
         else {
             const yTrue = y[0];
-            const yPred = net.predict(x);
+            const yPred = net.predictValue(x);
 
             errPct = yTrue > 0
                 ? Math.abs(yPred - yTrue) / Math.abs(yTrue) * 100

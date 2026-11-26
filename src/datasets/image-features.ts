@@ -6,22 +6,30 @@
 //          perdue, seule leur répartition compte.
 import sharp from "sharp";
 
-export const IMAGE_MODES = ["gray", "rgb", "hist"];
+export type ImageMode = "gray" | "rgb" | "hist";
+export const IMAGE_MODES: readonly ImageMode[] = ["gray", "rgb", "hist"];
+
+export interface ImageOptions {
+    size?: number;
+    mode?: ImageMode;
+    /** Miroir horizontal (pour l'augmentation de données). */
+    flop?: boolean;
+}
 
 const HUE_BINS = 12;
 const SAT_BINS = 4;
 const VAL_BINS = 4;
 const HIST_PIXELS = 32;
 
-export function imageInputSize({ size = 32, mode = "gray" } = {}) {
+export function imageInputSize({ size = 32, mode = "gray" }: ImageOptions = {}): number {
     if (mode === "gray") return size * size;
     if (mode === "rgb") return size * size * 3;
     if (mode === "hist") return HUE_BINS + SAT_BINS + VAL_BINS;
     throw new Error(`Mode d'image inconnu: ${mode} (disponibles : ${IMAGE_MODES.join(", ")})`);
 }
 
-// flop : miroir horizontal (pour l'augmentation de données).
-export async function imageToVector(file, { size = 32, mode = "gray", flop = false } = {}) {
+/** file : chemin du fichier ou contenu de l'image. */
+export async function imageToVector(file: string | Buffer, { size = 32, mode = "gray", flop = false }: ImageOptions = {}): Promise<number[]> {
     imageInputSize({ size, mode }); // vérifie le mode
 
     const side = mode === "hist" ? HIST_PIXELS : size;
@@ -36,7 +44,7 @@ export async function imageToVector(file, { size = 32, mode = "gray", flop = fal
 }
 
 // Conversion RGB -> HSV (h dans [0, 1[, s et v dans [0, 1]).
-function rgbToHsv(r, g, b) {
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     const d = max - min;
@@ -52,12 +60,12 @@ function rgbToHsv(r, g, b) {
 
 // Part des pixels dans chaque intervalle de teinte (pixels assez colorés
 // seulement), de saturation et de luminosité.
-function colorHistogram(buffer) {
-    const hue = new Array(HUE_BINS).fill(0);
-    const sat = new Array(SAT_BINS).fill(0);
-    const val = new Array(VAL_BINS).fill(0);
+function colorHistogram(buffer: Buffer): number[] {
+    const hue = new Array<number>(HUE_BINS).fill(0);
+    const sat = new Array<number>(SAT_BINS).fill(0);
+    const val = new Array<number>(VAL_BINS).fill(0);
     const pixels = buffer.length / 3;
-    const bin = (v, n) => Math.min(n - 1, Math.floor(v * n));
+    const bin = (v: number, n: number) => Math.min(n - 1, Math.floor(v * n));
 
     for (let i = 0; i < buffer.length; i += 3) {
         const [h, s, v] = rgbToHsv(buffer[i] / 255, buffer[i + 1] / 255, buffer[i + 2] / 255);

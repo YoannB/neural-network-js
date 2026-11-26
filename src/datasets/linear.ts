@@ -1,3 +1,5 @@
+import type { Dataset } from "../core/types.js";
+
 export default {
     name: "linear",
     inputSize: 1,
@@ -10,4 +12,4 @@ export default {
         { x: [3], y: [5] },
         { x: [4], y: [7] }
     ]
-};
+} satisfies Dataset;

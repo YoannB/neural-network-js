@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import { imageToVector, imageInputSize } from "../src/datasets/image-features.js";
+import { imageToVector, imageInputSize, type ImageMode } from "../src/datasets/image-features.js";
 
 // Image carrée de côté n : moitié gauche noire, moitié droite rouge pur.
 async function makeImage(n = 2) {
@@ -16,7 +16,7 @@ test("tailles d'entrée selon le mode", () => {
     assert.equal(imageInputSize({ size: 32, mode: "gray" }), 1024);
     assert.equal(imageInputSize({ size: 16, mode: "rgb" }), 768);
     assert.equal(imageInputSize({ mode: "hist" }), 20);
-    assert.throws(() => imageInputSize({ mode: "inconnu" }), /Mode d'image inconnu/);
+    assert.throws(() => imageInputSize({ mode: "inconnu" as ImageMode }), /Mode d'image inconnu/);
 });
 
 test("mode rgb : trois valeurs par pixel, entre 0 et 1", async () => {

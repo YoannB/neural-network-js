@@ -1,25 +1,33 @@
-// src/datasets/images.js
+// Jeu d'images : les fichiers .jpg de tmp/oranges/, « _ok » dans le nom pour une orange.
 import fs from "fs";
 import path from "path";
 import { splitSamples } from "./split.js";
-import { imageInputSize, imageToVector } from "./image-features.js";
+import { imageInputSize, imageToVector, type ImageMode } from "./image-features.js";
+import type { DatasetOptions } from "./index.js";
+import type { Dataset, Sample } from "../core/types.js";
 
 const IMAGE_DIR = "./tmp/oranges";
 
-// Options : size (32 par défaut) et mode (gray, rgb ou hist), voir image-features.js.
-// 80 % des images pour l'entraînement, 20 % pour le test.
-// augment(samples) renvoie les images miroir des exemples donnés : appelée par
-// l'entraînement sur ses seuls exemples, elle ne touche jamais au test.
-export default async function loadImages({ seed, size = 32, mode = "gray" } = {}) {
+/**
+ * Options : size (32 par défaut) et mode (gray, rgb ou hist), voir image-features.ts.
+ * 80 % des images pour l'entraînement, 20 % pour le test.
+ * augment(samples) renvoie les images miroir des exemples donnés : appelée par
+ * l'entraînement sur ses seuls exemples, elle ne touche jamais au test.
+ */
+export default async function loadImages(options: DatasetOptions = {}): Promise<Dataset> {
+    const seed = options.seed;
+    const size = (options.size as number | undefined) ?? 32;
+    const mode = (options.mode as ImageMode | undefined) ?? "gray";
+
     if (!fs.existsSync(IMAGE_DIR)) {
         throw new Error(
             `Dossier ${IMAGE_DIR} introuvable : place les images .jpg du jeu "images" dans ce dossier ` +
-            `(voir scripts/download-oranges.js).`
+            `(voir scripts/download-oranges.ts).`
         );
     }
 
     const files = fs.readdirSync(IMAGE_DIR).filter(f => f.endsWith(".jpg")).sort();
-    const samples = [];
+    const samples: Sample[] = [];
 
     for (const file of files) {
         const y = [file.includes("_ok.") ? 1 : 0];
@@ -44,7 +52,7 @@ export default async function loadImages({ seed, size = 32, mode = "gray" } = {}
             // Un histogramme de couleurs ne change pas avec le miroir.
             if (mode === "hist") return [];
             return Promise.all(trainSamples.map(async s => ({
-                x: await imageToVector(path.join(IMAGE_DIR, s.label), { size, mode, flop: true }),
+                x: await imageToVector(path.join(IMAGE_DIR, s.label ?? ""), { size, mode, flop: true }),
                 y: s.y,
                 label: `${s.label} (miroir)`
             })));

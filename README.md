@@ -31,9 +31,10 @@ Tu es sur la branche `claude-improvement` : c'est la reprise du projet par Claud
 | `step-08-multiclass` | Classification multiclasse ← version de `main` |
 | `claude-01-fiabilite` | Corrections, graine aléatoire, séparation entraînement / test, tests |
 | `claude-02-api` | Couches cachées configurables, sauvegarde complète des optimiseurs, nettoyage |
-| **`claude-03-images`** | **Évaluation sur plusieurs graines, options d'image, augmentation, L2, arrêt sur validation** |
+| `claude-03-images` | Évaluation sur plusieurs graines, options d'image, augmentation, L2, arrêt sur validation |
+| **`claude-04-typescript`** | **Portage en TypeScript strict, comportement identique** |
 
-Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js 18 ou plus.
+Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js 22 ou plus pour cette branche (Node.js 18 suffit pour les tags précédents).
 
 ---
 
@@ -41,7 +42,7 @@ Pour passer d'une étape à l'autre : `git checkout <tag>`. Prérequis : Node.js
 
 ```sh
 npm install
-npm test
+npm test                  # compile puis lance les tests
 npm run train -- rps
 npm run table -- rps
 npm run exec -- rps 1 0 0
@@ -55,7 +56,9 @@ Options de `train` et `evaluate` :
 
 `npm run evaluate -- <dataset> --seeds 1-10 [options]` entraîne une fois par graine et donne la moyenne et la dispersion du score sur les exemples de test.
 
-Sous Windows PowerShell 5.1, `npm run train -- rps --epochs 500` peut perdre le `--`, et les options ne sont alors pas transmises. Dans ce cas, appelle les scripts directement : `node src/train.js rps --epochs 500`.
+Le code est en TypeScript, dans `src/` : chaque script npm le compile d'abord vers `dist/` (`npm run build` le fait seul).
+
+Sous Windows PowerShell 5.1, `npm run train -- rps --epochs 500` peut perdre le `--`, et les options ne sont alors pas transmises. Dans ce cas, compile une fois puis appelle les scripts compilés : `npm run build`, puis `node dist/src/train.js rps --epochs 500`.
 
 Jeux de données : `linear`, `square`, `xor`, `primes`, `rps`, `images`.
 
@@ -69,10 +72,10 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
    PIXABAY_API_KEY=ta_clé
    ```
 
-2. Télécharge 100 images. Le script lit `.env.local` (ou `.env`) lui-même avec Node 20.12 ou plus ; sinon, utilise `node --env-file=.env.local …` ou définis `PIXABAY_API_KEY` dans le terminal. Une image déjà présente n'est pas téléchargée de nouveau.
+2. Télécharge 100 images. Le script lit `.env.local` (ou `.env`) lui-même ; tu peux aussi définir `PIXABAY_API_KEY` dans le terminal. Une image déjà présente n'est pas téléchargée de nouveau.
 
    ```sh
-   node scripts/download-oranges.js
+   npm run download-images
    ```
 
 3. Trie les images à la main. Le script les nomme `orange_1_ko.jpg`, `orange_2_ko.jpg`…, c'est-à-dire toutes de la classe 0. Renomme en `_ok` celles qui montrent une orange, par exemple `orange_12_ok.jpg`. Sans ce tri, le réseau n'aurait rien à apprendre.
@@ -80,10 +83,76 @@ Le jeu `images` lit les fichiers `.jpg` du dossier `tmp/oranges/`, qui n'est pas
 4. Entraîne puis évalue. Avec la descente de gradient simple, la perte baisse régulièrement ; avec Adam, elle oscille sur ce jeu.
 
    ```sh
-   node src/train.js images --optimizer sgd --epochs 3000
-   node src/table.js images
-   node src/exec.js images chemin/vers/une-image.jpg
+   npm run build
+   node dist/src/train.js images --optimizer sgd --epochs 3000
+   node dist/src/table.js images
+   node dist/src/exec.js images chemin/vers/une-image.jpg
    ```
+
+## claude-04 — TypeScript
+
+Tout le code (réseau, jeux de données, scripts, tests) est porté en TypeScript, en mode strict. Le comportement ne change pas : c'est la condition de cette étape.
+
+- **Types partagés** (`src/core/types.ts`) : `Task`, `Sample`, `Dataset`, `ModelJSON` (le format des modèles sauvegardés, ancien format compris), les activations et les optimiseurs. Une tâche ou une activation mal écrite est refusée à la compilation.
+- **`predictValue` et `predictProbabilities`** complètent `predict`, dont le type de retour dépend de la tâche (un nombre, ou un vecteur en multiclasse).
+- **Ligne de commande** : un optimiseur, une activation ou une augmentation inconnus donnent une erreur au lieu d'être ignorés.
+- **Compilation** : `tsc` (TypeScript 7) compile `src/`, `scripts/` et `test/` vers `dist/`. Les scripts npm compilent avant de s'exécuter. Les tests restent sur `node:test`.
+- **Node.js 22 ou plus** : Node 18 et 20 ne sont plus maintenus.
+
+Les sections des étapes précédentes citent les fichiers `.js` de leur tag ; ils sont aujourd'hui en `.ts`, aux mêmes emplacements.
+
+### Vérification : mêmes modèles qu'en JavaScript
+
+Avant le portage, neuf entraînements ont été lancés avec le code JavaScript de `claude-03`, puis relancés avec le code TypeScript compilé, avec les mêmes options :
+
+| Jeu | Options |
+|---|---|
+| `rps`, `xor` | par défaut |
+| `square`, `primes` | `--epochs 2000` |
+| `linear` | `--epochs 500 --optimizer sgd` |
+| `xor` | `--optimizer rmsprop --layers 6,4 --activation relu --epochs 1000 --l2 0.001` |
+| `rps` | `--validation 0.2 --epochs 200 --target-loss 0 --patience 100` |
+| `images` | `--image-mode hist --epochs 200` |
+| `images` | `--image-size 8 --image-mode rgb --augment flip --epochs 100 --optimizer sgd --validation 0.2` |
+
+Les neuf modèles sauvegardés, les sorties de `table` et celle de `exec` sont identiques octet pour octet ; seules les durées affichées par `train` diffèrent.
+
+### Exemples (claude-04)
+
+```
+$ npm test          (extrait)
+> neural-network-js@1.0.0 pretest
+> tsc
+
+> neural-network-js@1.0.0 test
+> node --test "dist/test/*.test.js"
+
+✔ gradients corrects : régression (3.5302ms)
+✔ gradients corrects : classification binaire (sigmoïde) (1.0948ms)
+✔ gradients corrects : classification multiclasse (softmax) (1.8552ms)
+…
+✔ reprendre un entraînement adam sauvegardé donne le même modèle (4.1698ms)
+✔ reprendre un entraînement rmsprop sauvegardé donne le même modèle (4.4501ms)
+…
+ℹ tests 37
+ℹ pass 37
+ℹ fail 0
+```
+
+Ce que le compilateur refuse maintenant, sur un fichier d'essai :
+
+```ts
+const net = new Network({ inputSize: 2, task: "classification", hiddenLayers: [8] });
+console.log(net.predict([1, 0]).toFixed(3));
+```
+
+```
+error TS2322: Type '"classification"' is not assignable to type 'Task | undefined'.
+error TS2339: Property 'toFixed' does not exist on type 'number | number[]'.
+  Property 'toFixed' does not exist on type 'number[]'.
+```
+
+La tâche s'écrit `"binary-classification"`, et `predict` peut renvoyer un vecteur : `predictValue` renvoie toujours un nombre.
 
 ## claude-03 — Images : mesurer avant de conclure
 

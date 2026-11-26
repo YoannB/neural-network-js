@@ -1,20 +1,24 @@
 import fs from "fs";
-import { imageToVector } from "./datasets/image-features.js";
+import { imageToVector, type ImageOptions } from "./datasets/image-features.js";
 import { Network } from "./core/network.js";
+import type { ModelJSON } from "./core/types.js";
+
+// node dist/src/exec.js <dataset> <entrée> : l'entrée est une liste de nombres,
+// un tableau JSON ou le chemin d'une image.
 
 const dataset = process.argv[2];
 if (!dataset) {
-  console.error("Usage: exec.js <dataset> <input>");
+  console.error("Usage: exec <dataset> <input>");
   process.exit(1);
 }
 
-let inputStartIndex = 3;
+const inputStartIndex = 3;
 
 const modelName = dataset;
 
 console.log(`Read ./models/${modelName}.json`);
 
-const rawModel = JSON.parse(
+const rawModel: ModelJSON = JSON.parse(
   fs.readFileSync(`./models/${modelName}.json`, "utf-8")
 );
 
@@ -27,12 +31,12 @@ if (!args.length) {
   process.exit(1);
 }
 
-let input;
+let input: number[];
 
 // image : même préparation qu'à l'entraînement. Les options sont enregistrées
 // dans le modèle ; un ancien modèle est en niveaux de gris, de côté sqrt(inputSize).
 if (fs.existsSync(args[0])) {
-  const imageOptions = rawModel.config.dataset ?? { size: Math.sqrt(inputSize), mode: "gray" };
+  const imageOptions: ImageOptions = rawModel.config.dataset ?? { size: Math.sqrt(inputSize), mode: "gray" };
   input = await imageToVector(args[0], imageOptions);
 }
 

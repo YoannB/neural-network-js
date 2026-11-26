@@ -5,22 +5,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Network } from "../src/core/network.js";
 import { setSeed } from "../src/core/random.js";
+import type { HiddenActivation, Task } from "../src/core/types.js";
 
 const LR = 1e-3;
 const H = 1e-5;
 
-function loss(net, x, y) {
+function loss(net: Network, x: number[], y: number[]): number {
     const multiclass = net.task === "multiclass-classification";
     const value = net.computeLoss(net.predict(x), multiclass ? y : y[0]);
     // En régression, le gradient p - y correspond à la perte (p - y)² / 2.
     return net.task === "regression" ? value / 2 : value;
 }
 
-function clone(net) {
+function clone(net: Network): Network {
     return Network.load(JSON.parse(JSON.stringify(net.toJSON())));
 }
 
-function checkGradients(task, outputSize, x, y, { hiddenLayers = [4], activation = "tanh" } = {}) {
+function checkGradients(
+    task: Task, outputSize: number, x: number[], y: number[],
+    { hiddenLayers = [4], activation = "tanh" }: { hiddenLayers?: number[]; activation?: HiddenActivation } = {}
+): void {
     setSeed(5);
     const net = new Network({ inputSize: x.length, hiddenLayers, activation, outputSize, task, learningRate: LR, optimizer: "sgd" });
 
@@ -69,7 +73,7 @@ test("gradients corrects avec plusieurs couches cachées", () => {
 });
 
 test("gradients corrects pour chaque activation cachée", () => {
-    for (const activation of ["tanh", "relu", "leakyrelu", "sigmoid"]) {
+    for (const activation of ["tanh", "relu", "leakyrelu", "sigmoid"] as const) {
         checkGradients("binary-classification", 1, [0.3, -0.8], [1], { hiddenLayers: [4, 3], activation });
     }
 });
