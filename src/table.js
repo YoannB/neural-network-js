@@ -18,19 +18,14 @@ const rawModel = JSON.parse(
 const net = Network.load(rawModel);
 
 // -------------------------
-const dataset = await getDataset(datasetName);
+// Même graine qu'à l'entraînement : on retrouve la même séparation train/test.
+const dataset = await getDataset(datasetName, { seed: rawModel.config.seed });
 const samples = dataset.samples;
 const task = dataset.task ?? "regression";
 
-const hasSplit = Number.isFinite(dataset.indexEndTrain);
-
-const trainSamples = hasSplit
-    ? samples.slice(0, dataset.indexEndTrain)
-    : samples;
-
-const testSamples = hasSplit
-    ? samples.slice(dataset.indexEndTrain)
-    : samples;
+const trainSamples = samples;
+const testSamples = dataset.testSamples ?? [];
+const hasSplit = testSamples.length > 0;
 
 // -------------------------
 function evaluate(samples, title) {

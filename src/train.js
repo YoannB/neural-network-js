@@ -13,20 +13,6 @@ let argsStartIndex = 3;
 
 const modelName = dataset;
 
-const datasetObj = await getDataset(dataset);
-
-// -------------------------
-console.log(`Dataset    : ${datasetObj.name}`);
-console.log(`Model name : ${modelName}`);
-console.log(`Samples    : ${datasetObj.samples.length}`);
-console.log(`Input size : ${datasetObj.inputSize}`);
-console.log(`Output size: ${datasetObj.outputSize}`);
-console.log(`Task       : ${datasetObj.task}`);
-
-if (Number.isFinite(datasetObj.indexEndTrain)) {
-  console.log(`Index end train: ${datasetObj.indexEndTrain}`);
-}
-
 // -------------------------
 // Hyperparams
 // -------------------------
@@ -53,21 +39,31 @@ const NOISE = getArg("noise", 0.0);
 const OPTIMIZER = getArg("optimizer", "adam");
 const SEED = getArg("seed", 42);
 
+const datasetObj = await getDataset(dataset, { seed: SEED });
+
+// -------------------------
+console.log(`Dataset    : ${datasetObj.name}`);
+console.log(`Model name : ${modelName}`);
+console.log(`Samples    : ${datasetObj.samples.length + (datasetObj.testSamples?.length ?? 0)}`);
+console.log(`Input size : ${datasetObj.inputSize}`);
+console.log(`Output size: ${datasetObj.outputSize}`);
+console.log(`Task       : ${datasetObj.task}`);
+
 console.log("Training config:", { EPOCHS, NEURONS, LR, NOISE, OPTIMIZER, SEED });
 
 setSeed(SEED);
 
 // -------------------------
-// Dataset split logique
+// Dataset split : seuls les exemples d'entraînement servent à apprendre
 // -------------------------
 
-const allSamples = datasetObj.samples;
-
-const trainSamples = Number.isFinite(datasetObj.indexEndTrain)
-  ? allSamples.slice(0, datasetObj.indexEndTrain)
-  : allSamples;
+const trainSamples = datasetObj.samples;
+const testCount = datasetObj.testSamples?.length ?? 0;
 
 console.log(`Training samples: ${trainSamples.length}`);
+if (testCount > 0) {
+  console.log(`Test samples    : ${testCount} (non utilisés pour l'entraînement)`);
+}
 
 // -------------------------
 // Preprocessing
