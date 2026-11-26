@@ -83,6 +83,9 @@ export class Network {
                 neuron.bias = saved.bias;
                 neuron.m = saved.m;
                 neuron.v = saved.v;
+                // Moments du biais (Adam, RMSprop) : absents des modèles des étapes 7 et 8.
+                neuron.mBias = saved.mBias ?? 0;
+                neuron.vBias = saved.vBias ?? 0;
             });
         });
 
@@ -244,7 +247,9 @@ export class Network {
                     weights: n.weights,
                     bias: n.bias,
                     m: n.m,
-                    v: n.v
+                    v: n.v,
+                    mBias: n.mBias,
+                    vBias: n.vBias
                 }))
             }))
         };
